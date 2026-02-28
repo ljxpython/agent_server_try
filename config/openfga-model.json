@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    {
+      "type": "user"
+    },
+    {
+      "type": "tenant",
+      "relations": {
+        "owner": {
+          "this": {}
+        },
+        "admin": {
+          "this": {}
+        },
+        "member": {
+          "this": {}
+        },
+        "can_read": {
+          "union": {
+            "child": [
+              {"computedUserset": {"relation": "owner"}},
+              {"computedUserset": {"relation": "admin"}},
+              {"computedUserset": {"relation": "member"}}
+            ]
+          }
+        },
+        "can_write": {
+          "union": {
+            "child": [
+              {"computedUserset": {"relation": "owner"}},
+              {"computedUserset": {"relation": "admin"}}
+            ]
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "owner": {"directly_related_user_types": [{"type": "user"}]},
+          "admin": {"directly_related_user_types": [{"type": "user"}]},
+          "member": {"directly_related_user_types": [{"type": "user"}]}
+        }
+      }
+    },
+    {
+      "type": "project",
+      "relations": {
+        "tenant": {
+          "this": {}
+        },
+        "can_read": {
+          "tupleToUserset": {
+            "tupleset": {"relation": "tenant"},
+            "computedUserset": {"relation": "can_read"}
+          }
+        },
+        "can_write": {
+          "tupleToUserset": {
+            "tupleset": {"relation": "tenant"},
+            "computedUserset": {"relation": "can_write"}
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "tenant": {"directly_related_user_types": [{"type": "tenant"}]}
+        }
+      }
+    },
+    {
+      "type": "agent",
+      "relations": {
+        "project": {
+          "this": {}
+        },
+        "can_read": {
+          "tupleToUserset": {
+            "tupleset": {"relation": "project"},
+            "computedUserset": {"relation": "can_read"}
+          }
+        },
+        "can_write": {
+          "tupleToUserset": {
+            "tupleset": {"relation": "project"},
+            "computedUserset": {"relation": "can_write"}
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "project": {"directly_related_user_types": [{"type": "project"}]}
+        }
+      }
+    }
+  ]
+}
