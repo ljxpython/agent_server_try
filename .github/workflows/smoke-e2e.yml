@@ -1,0 +1,115 @@
+name: smoke-e2e
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Start PostgreSQL
+        run: |
+          docker run -d \
+            --name agent-platform-pg \
+            -e POSTGRES_USER=agent \
+            -e POSTGRES_PASSWORD=agent_pwd \
+            -e POSTGRES_DB=agent_platform \
+            -p 5432:5432 \
+            postgres:16
+          for i in {1..30}; do
+            if docker exec agent-platform-pg pg_isready -U agent -d agent_platform; then
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Apply DB migrations
+        env:
+          DATABASE_URL: postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform
+        run: uv run alembic upgrade head
+
+      - name: Start Keycloak
+        run: |
+          docker run -d \
+            --name agent-keycloak \
+            -p 18080:8080 \
+            -e KEYCLOAK_ADMIN=admin \
+            -e KEYCLOAK_ADMIN_PASSWORD=admin123 \
+            quay.io/keycloak/keycloak:26.0 \
+            start-dev
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:18080/realms/master/.well-known/openid-configuration >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Configure Keycloak realm/client/users
+        run: |
+          docker exec agent-keycloak sh -lc '
+            /opt/keycloak/bin/kcadm.sh config credentials --server http://127.0.0.1:8080 --realm master --user admin --password admin123 >/dev/null && \
+            /opt/keycloak/bin/kcadm.sh create realms -s realm=agent-platform -s enabled=true >/dev/null 2>&1 || true && \
+            /opt/keycloak/bin/kcadm.sh create clients -r agent-platform -s clientId=agent-proxy -s enabled=true -s publicClient=true -s directAccessGrantsEnabled=true -s standardFlowEnabled=true >/dev/null 2>&1 || true && \
+            /opt/keycloak/bin/kcadm.sh create users -r agent-platform -s username=demo_user -s enabled=true -s email=demo_user@example.com -s emailVerified=true -s firstName=Demo -s lastName=User >/dev/null 2>&1 || true && \
+            /opt/keycloak/bin/kcadm.sh create users -r agent-platform -s username=demo_member -s enabled=true -s email=demo_member@example.com -s emailVerified=true -s firstName=Demo -s lastName=Member >/dev/null 2>&1 || true && \
+            U1=$(/opt/keycloak/bin/kcadm.sh get users -r agent-platform -q username=demo_user --fields id --format csv --noquotes | tail -n +2) && \
+            U2=$(/opt/keycloak/bin/kcadm.sh get users -r agent-platform -q username=demo_member --fields id --format csv --noquotes | tail -n +2) && \
+            /opt/keycloak/bin/kcadm.sh set-password -r agent-platform --userid "$U1" --new-password Demo@123456 >/dev/null && \
+            /opt/keycloak/bin/kcadm.sh set-password -r agent-platform --userid "$U2" --new-password Demo@123456 >/dev/null
+          '
+
+      - name: Start OpenFGA
+        run: |
+          docker run -d \
+            --name agent-openfga \
+            -p 18081:8080 \
+            openfga/openfga:latest \
+            run
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:18081/healthz >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Bootstrap OpenFGA store/model
+        run: |
+          OUT=$(PYTHONPATH=. OPENFGA_URL=http://127.0.0.1:18081 uv run python scripts/setup_openfga.py)
+          echo "$OUT"
+          STORE_ID=$(echo "$OUT" | grep OPENFGA_STORE_ID= | cut -d= -f2)
+          MODEL_ID=$(echo "$OUT" | grep OPENFGA_MODEL_ID= | cut -d= -f2)
+          echo "OPENFGA_STORE_ID=$STORE_ID" >> $GITHUB_ENV
+          echo "OPENFGA_MODEL_ID=$MODEL_ID" >> $GITHUB_ENV
+
+      - name: Run smoke e2e
+        env:
+          PLATFORM_DB_ENABLED: "true"
+          KEYCLOAK_AUTH_ENABLED: "true"
+          KEYCLOAK_AUTH_REQUIRED: "true"
+          KEYCLOAK_ISSUER: http://127.0.0.1:18080/realms/agent-platform
+          KEYCLOAK_AUDIENCE: agent-proxy
+          OPENFGA_ENABLED: "true"
+          OPENFGA_AUTHZ_ENABLED: "true"
+          OPENFGA_AUTO_BOOTSTRAP: "false"
+          OPENFGA_URL: http://127.0.0.1:18081
+          DATABASE_URL: postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform
+          RUNTIME_ROLE_ENFORCEMENT_ENABLED: "true"
+        run: uv run python scripts/smoke_e2e.py

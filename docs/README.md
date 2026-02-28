@@ -9,6 +9,8 @@
 - `docs/keycloak-integration.md`：Keycloak JWT 验签接入与联调说明。
 - `docs/platform-api.md`：租户与成员管理 API 使用说明。
 - `docs/openfga-integration.md`：OpenFGA 启动、初始化与授权接入说明。
+- `docs/error-playbook.md`：已遇到问题与修复手册（防踩坑）。
+- `docs/testing.md`：自动化冒烟测试脚本与运行方式。
 
 ## 文档约定
 
