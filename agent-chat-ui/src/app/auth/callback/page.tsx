@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import { consumePkceSession } from "@/lib/oidc-client";
-import { setOidcTokenSet } from "@/lib/oidc-storage";
+import { ensureApiUrlSeeded, setOidcTokenSet } from "@/lib/oidc-storage";
 
 function OidcCallbackContent() {
   const router = useRouter();
@@ -70,6 +70,7 @@ function OidcCallbackContent() {
         id_token: payload.id_token,
         expires_at: expiresAt,
       });
+      ensureApiUrlSeeded();
 
       if (!cancelled) {
         router.replace(session.returnTo || "/workspace/chat");

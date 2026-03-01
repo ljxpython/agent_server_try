@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { logFrontendServer } from "@/lib/server-logger";
 
 type CachedToken = {
@@ -7,6 +7,12 @@ type CachedToken = {
 };
 
 let cachedToken: CachedToken | null = null;
+
+type TokenResponse = {
+  access_token: string;
+  expires_at: number;
+  cached: boolean;
+};
 
 function decodeJwtExp(token: string): number {
   const parts = token.split(".");
@@ -42,6 +48,74 @@ function canUseCache(): boolean {
   if (!cachedToken) return false;
   const now = Math.floor(Date.now() / 1000);
   return cachedToken.expiresAt > now + 30;
+}
+
+async function fetchTokenFromKeycloak(username: string, password: string, clientId: string): Promise<TokenResponse> {
+  const body = new URLSearchParams({
+    grant_type: "password",
+    client_id: clientId,
+    username,
+    password,
+  });
+
+  const res = await fetch(tokenUrl(), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    await logFrontendServer({
+      level: "error",
+      event: "keycloak_token_upstream_error",
+      message: "Keycloak token upstream request failed",
+      context: {
+        status: res.status,
+      },
+    });
+    throw new Error(JSON.stringify({
+      status: res.status,
+      body: text,
+    }));
+  }
+
+  const payload = JSON.parse(text) as { access_token?: string };
+  if (!payload.access_token) {
+    await logFrontendServer({
+      level: "error",
+      event: "keycloak_token_missing_in_response",
+      message: "access_token missing in Keycloak response",
+    });
+    throw new Error(JSON.stringify({
+      status: 502,
+      body: "keycloak_token_missing",
+    }));
+  }
+
+  const exp = decodeJwtExp(payload.access_token);
+  cachedToken = {
+    token: payload.access_token,
+    expiresAt: exp,
+  };
+
+  await logFrontendServer({
+    level: "info",
+    event: "keycloak_token_issued",
+    message: "Fetched new keycloak token",
+    context: {
+      expires_at: exp,
+    },
+  });
+
+  return {
+    access_token: payload.access_token,
+    expires_at: exp,
+    cached: false,
+  };
 }
 
 export async function GET() {
@@ -100,75 +174,54 @@ export async function GET() {
     );
   }
 
-  const body = new URLSearchParams({
-    grant_type: "password",
-    client_id: clientId,
-    username,
-    password,
-  });
-
-  const res = await fetch(tokenUrl(), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body,
-    cache: "no-store",
-  });
-
-  const text = await res.text();
-  if (!res.ok) {
-    await logFrontendServer({
-      level: "error",
-      event: "keycloak_token_upstream_error",
-      message: "Keycloak token upstream request failed",
-      context: {
-        status: res.status,
-      },
-    });
+  try {
+    return NextResponse.json(await fetchTokenFromKeycloak(username, password, clientId));
+  } catch (error) {
+    const detail = JSON.parse(String((error as Error).message || "{}")) as { status?: number; body?: string };
     return NextResponse.json(
       {
         error: "keycloak_token_request_failed",
-        status: res.status,
-        body: text,
+        status: detail.status ?? 502,
+        body: detail.body ?? "unknown_error",
       },
       { status: 502 },
     );
   }
+}
 
-  const payload = JSON.parse(text) as { access_token?: string };
-  if (!payload.access_token) {
-    await logFrontendServer({
-      level: "error",
-      event: "keycloak_token_missing_in_response",
-      message: "access_token missing in Keycloak response",
-    });
+export async function POST(request: NextRequest) {
+  if ((process.env.KEYCLOAK_TOKEN_PROXY_ENABLED ?? "false") !== "true") {
+    return NextResponse.json({ error: "keycloak_token_proxy_disabled" }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => null)) as {
+    username?: string;
+    password?: string;
+    client_id?: string;
+  } | null;
+
+  const username = body?.username?.trim();
+  const password = body?.password;
+  const clientId = body?.client_id?.trim() || process.env.KEYCLOAK_CLIENT_ID || "agent-proxy";
+
+  if (!username || !password) {
+    return NextResponse.json(
+      { error: "invalid_request", message: "username and password are required" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    return NextResponse.json(await fetchTokenFromKeycloak(username, password, clientId));
+  } catch (error) {
+    const detail = JSON.parse(String((error as Error).message || "{}")) as { status?: number; body?: string };
     return NextResponse.json(
       {
-        error: "keycloak_token_missing",
+        error: "keycloak_token_request_failed",
+        status: detail.status ?? 502,
+        body: detail.body ?? "unknown_error",
       },
       { status: 502 },
     );
   }
-
-  const exp = decodeJwtExp(payload.access_token);
-  cachedToken = {
-    token: payload.access_token,
-    expiresAt: exp,
-  };
-
-  await logFrontendServer({
-    level: "info",
-    event: "keycloak_token_issued",
-    message: "Fetched new keycloak token",
-    context: {
-      expires_at: exp,
-    },
-  });
-
-  return NextResponse.json({
-    access_token: payload.access_token,
-    expires_at: exp,
-    cached: false,
-  });
 }
