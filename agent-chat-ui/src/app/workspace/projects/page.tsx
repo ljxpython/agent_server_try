@@ -1,34 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { createAgent, deleteAgent, listAgents, updateAgent } from "@/lib/platform-api/agents";
 import { toUserErrorMessage } from "@/lib/platform-api/errors";
-import type { Agent } from "@/lib/platform-api/types";
+import { createProject, deleteProject, listProjects, updateProject } from "@/lib/platform-api/projects";
+import type { Project } from "@/lib/platform-api/types";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 const PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
-const DEFAULT_RUNTIME_URL = "http://127.0.0.1:8123";
-const DEFAULT_GRAPH_ID = "assistant";
 
-type AgentForm = {
+type ProjectForm = {
   name: string;
-  graphId: string;
-  runtimeBaseUrl: string;
-  description: string;
 };
 
-const DEFAULT_FORM: AgentForm = {
+const DEFAULT_FORM: ProjectForm = {
   name: "",
-  graphId: DEFAULT_GRAPH_ID,
-  runtimeBaseUrl: DEFAULT_RUNTIME_URL,
-  description: "",
 };
 
-export default function AgentsPage() {
-  const { projectId, agentId, setAgentId } = useWorkspaceContext();
-  const [items, setItems] = useState<Agent[]>([]);
+export default function ProjectsPage() {
+  const { tenantId, projectId, setProjectId } = useWorkspaceContext();
+  const [items, setItems] = useState<Project[]>([]);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
   const [sortBy, setSortBy] = useState<"created_at" | "name">("created_at");
@@ -39,15 +31,10 @@ export default function AgentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [form, setForm] = useState<AgentForm>(DEFAULT_FORM);
-  const graphIdOptions = useMemo(() => {
-    const preset = [DEFAULT_GRAPH_ID];
-    const dynamic = items.map((item) => item.graph_id).filter(Boolean);
-    return Array.from(new Set([...preset, ...dynamic]));
-  }, [items]);
+  const [form, setForm] = useState<ProjectForm>(DEFAULT_FORM);
 
   const refreshList = useCallback(async () => {
-    if (!projectId) {
+    if (!tenantId) {
       setItems([]);
       setOffset(0);
       setError(null);
@@ -57,44 +44,36 @@ export default function AgentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await listAgents(projectId, {
+      const rows = await listProjects(tenantId, {
         limit: pageSize,
         offset,
         sortBy,
         sortOrder,
       });
       setItems(rows);
-      if (!agentId && rows.length > 0) {
-        setAgentId(rows[0].id);
-      }
     } catch (err) {
       setError(toUserErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [agentId, offset, pageSize, projectId, setAgentId, sortBy, sortOrder]);
+  }, [offset, pageSize, sortBy, sortOrder, tenantId]);
 
   useEffect(() => {
     void refreshList();
   }, [refreshList]);
 
   useEffect(() => {
-    if (!projectId) {
+    if (!tenantId) {
       setForm(DEFAULT_FORM);
       setEditingId(null);
       setNotice(null);
       setError(null);
     }
-  }, [projectId]);
+  }, [tenantId]);
 
-  function startEdit(agent: Agent) {
-    setEditingId(agent.id);
-    setForm({
-      name: agent.name,
-      graphId: agent.graph_id,
-      runtimeBaseUrl: agent.runtime_base_url,
-      description: agent.description,
-    });
+  function startEdit(project: Project) {
+    setEditingId(project.id);
+    setForm({ name: project.name });
     setNotice(null);
     setError(null);
   }
@@ -106,31 +85,21 @@ export default function AgentsPage() {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!projectId) return;
+    if (!tenantId) return;
 
     setSubmitting(true);
     setError(null);
     setNotice(null);
     try {
+      const normalizedName = form.name.trim();
       if (editingId) {
-        const updated = await updateAgent(editingId, {
-          name: form.name.trim(),
-          graph_id: form.graphId.trim(),
-          runtime_base_url: form.runtimeBaseUrl.trim(),
-          description: form.description.trim(),
-        });
-        setNotice(`Updated agent: ${updated.name}`);
+        const updated = await updateProject(editingId, { name: normalizedName });
+        setNotice(`Updated project: ${updated.name}`);
       } else {
-        const created = await createAgent({
-          project_id: projectId,
-          name: form.name.trim(),
-          graph_id: form.graphId.trim(),
-          runtime_base_url: form.runtimeBaseUrl.trim(),
-          description: form.description.trim(),
-        });
-        setNotice(`Created agent: ${created.name}`);
+        const created = await createProject({ tenant_id: tenantId, name: normalizedName });
+        setNotice(`Created project: ${created.name}`);
         setOffset(0);
-        setAgentId(created.id);
+        setProjectId(created.id);
       }
       resetForm();
       await refreshList();
@@ -141,19 +110,19 @@ export default function AgentsPage() {
     }
   }
 
-  async function onDeleteAgent(agent: Agent) {
-    setRemovingId(agent.id);
+  async function onDeleteProject(project: Project) {
+    setRemovingId(project.id);
     setError(null);
     setNotice(null);
     try {
-      await deleteAgent(agent.id);
-      if (editingId === agent.id) {
+      await deleteProject(project.id);
+      if (editingId === project.id) {
         resetForm();
       }
-      if (agentId === agent.id) {
-        setAgentId("");
+      if (projectId === project.id) {
+        setProjectId("");
       }
-      setNotice(`Deleted agent: ${agent.name}`);
+      setNotice(`Deleted project: ${project.name}`);
       await refreshList();
     } catch (err) {
       setError(toUserErrorMessage(err));
@@ -162,64 +131,28 @@ export default function AgentsPage() {
     }
   }
 
-  const actionDisabled = loading || submitting || !projectId;
+  const actionDisabled = loading || submitting || !tenantId;
 
   return (
     <section className="p-6">
-      <h2 className="text-xl font-semibold">Agents</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Project-scoped assistant profile list and write operations.</p>
+      <h2 className="text-xl font-semibold">Projects</h2>
+      <p className="text-muted-foreground mt-2 text-sm">Tenant-scoped project list and write operations.</p>
 
-      {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
+      {!tenantId ? <p className="text-muted-foreground mt-4 text-sm">Select a tenant first.</p> : null}
 
-      {projectId ? (
+      {tenantId ? (
         <form className="mt-4 grid gap-2 rounded-md border p-3" onSubmit={onSubmit}>
-          <h3 className="text-sm font-medium">{editingId ? "Update agent" : "Create agent"}</h3>
+          <h3 className="text-sm font-medium">{editingId ? "Update project" : "Create project"}</h3>
           <div className="grid gap-2 md:grid-cols-2">
             <input
               className="bg-background rounded-md border px-2 py-1 text-sm"
-              placeholder="Agent name"
+              placeholder="Project name"
               value={form.name}
-              onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+              onChange={(event) => setForm({ name: event.target.value })}
               disabled={actionDisabled}
               required
               minLength={2}
               maxLength={128}
-            />
-            <div className="grid gap-1">
-              <input
-                className="bg-background rounded-md border px-2 py-1 text-sm"
-                placeholder="Graph ID"
-                list="graph-id-options"
-                value={form.graphId}
-                onChange={(event) => setForm((prev) => ({ ...prev, graphId: event.target.value }))}
-                disabled={actionDisabled}
-                required
-                minLength={2}
-                maxLength={128}
-              />
-              <datalist id="graph-id-options">
-                {graphIdOptions.map((value) => (
-                  <option key={value} value={value} />
-                ))}
-              </datalist>
-              <p className="text-muted-foreground text-xs">默认使用 assistant；也可输入已有 graph id。</p>
-            </div>
-            <input
-              className="bg-background rounded-md border px-2 py-1 text-sm"
-              placeholder="Runtime URL"
-              value={form.runtimeBaseUrl}
-              disabled
-              required
-              minLength={10}
-              maxLength={512}
-            />
-            <input
-              className="bg-background rounded-md border px-2 py-1 text-sm"
-              placeholder="Description"
-              value={form.description}
-              onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-              disabled={actionDisabled}
-              maxLength={2000}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -244,7 +177,7 @@ export default function AgentsPage() {
         </form>
       ) : null}
 
-      {projectId ? (
+      {tenantId ? (
         <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
           <select
             className="bg-background rounded-md border px-2 py-1"
@@ -312,50 +245,46 @@ export default function AgentsPage() {
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
       {notice ? <p className="mt-4 text-sm text-green-700">{notice}</p> : null}
 
-      {!loading && !error && projectId ? (
+      {!loading && !error && tenantId ? (
         <div className="mt-4 overflow-auto rounded-md border">
-          <table className="w-full min-w-[860px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Graph ID</th>
-                <th className="px-3 py-2">Runtime URL</th>
-                <th className="px-3 py-2">Description</th>
+                <th className="px-3 py-2">Tenant ID</th>
                 <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {items.map((agent) => (
-                <tr key={agent.id} className="border-t">
-                  <td className="px-3 py-2">{agent.name}</td>
-                  <td className="px-3 py-2">{agent.graph_id}</td>
-                  <td className="px-3 py-2">{agent.runtime_base_url}</td>
-                  <td className="px-3 py-2">{agent.description || "-"}</td>
+              {items.map((project) => (
+                <tr key={project.id} className="border-t">
+                  <td className="px-3 py-2">{project.name}</td>
+                  <td className="px-3 py-2">{project.tenant_id}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        onClick={() => startEdit(agent)}
-                        disabled={loading || submitting || removingId === agent.id}
+                        onClick={() => startEdit(project)}
+                        disabled={loading || submitting || removingId === project.id}
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        onClick={() => setAgentId(agent.id)}
-                        disabled={loading || submitting || removingId === agent.id || agentId === agent.id}
+                        onClick={() => setProjectId(project.id)}
+                        disabled={loading || submitting || removingId === project.id || projectId === project.id}
                       >
-                        {agentId === agent.id ? "Selected" : "Use in Chat"}
+                        {projectId === project.id ? "Selected" : "Use"}
                       </button>
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        onClick={() => void onDeleteAgent(agent)}
-                        disabled={loading || submitting || removingId === agent.id}
+                        onClick={() => void onDeleteProject(project)}
+                        disabled={loading || submitting || removingId === project.id}
                       >
-                        {removingId === agent.id ? "Deleting..." : "Delete"}
+                        {removingId === project.id ? "Deleting..." : "Delete"}
                       </button>
                     </div>
                   </td>
@@ -363,8 +292,8 @@ export default function AgentsPage() {
               ))}
               {items.length === 0 ? (
                 <tr>
-                  <td className="text-muted-foreground px-3 py-4" colSpan={5}>
-                    No agents found.
+                  <td className="text-muted-foreground px-3 py-4" colSpan={3}>
+                    No projects found.
                   </td>
                 </tr>
               ) : null}

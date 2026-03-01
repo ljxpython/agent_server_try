@@ -2,19 +2,28 @@ import { validate } from "uuid";
 import { getApiKey } from "@/lib/api-key";
 import { logClient } from "@/lib/client-logger";
 import { isJwtToken } from "@/lib/token";
-import { Thread } from "@langchain/langgraph-sdk";
+import type { Thread } from "@langchain/langgraph-sdk";
 import { useQueryState } from "nuqs";
 import {
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
   createContext,
-  useContext,
-  ReactNode,
   useCallback,
+  useContext,
   useState,
-  Dispatch,
-  SetStateAction,
 } from "react";
 import { createClient } from "./client";
 import { useWorkspaceContext } from "./WorkspaceContext";
+
+const DEFAULT_PROXY_API_URL = "http://localhost:2024";
+
+function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
+  if (apiUrl.includes(":8123")) {
+    return fallbackApiUrl || DEFAULT_PROXY_API_URL;
+  }
+  return apiUrl;
+}
 
 interface ThreadContextType {
   getThreads: () => Promise<Thread[]>;
@@ -48,7 +57,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   const [threadsLoading, setThreadsLoading] = useState(false);
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
-    const finalApiUrl = apiUrl || envApiUrl;
+    const finalApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
     const finalAssistantId = assistantId || envAssistantId;
     if (!finalApiUrl || !finalAssistantId) return [];
 

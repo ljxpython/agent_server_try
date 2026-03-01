@@ -26,6 +26,8 @@ import { ArrowRight } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
 import { logClient } from "@/lib/client-logger";
+import { listAgents } from "@/lib/platform-api/agents";
+import { listRuntimeBindings } from "@/lib/platform-api/runtime-bindings";
 import { isJwtToken } from "@/lib/token";
 import { useThreads } from "./Thread";
 import { useWorkspaceContext } from "./WorkspaceContext";
@@ -232,11 +234,19 @@ const StreamSession = ({
 // Default values for the form
 const DEFAULT_API_URL = "http://localhost:2024";
 const DEFAULT_ASSISTANT_ID = "assistant";
+const DEFAULT_RUNTIME_ENV = process.env.NEXT_PUBLIC_RUNTIME_ENV ?? "dev";
+
+function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
+  if (apiUrl.includes(":8123")) {
+    return fallbackApiUrl || DEFAULT_API_URL;
+  }
+  return apiUrl;
+}
 
 export const StreamProvider: FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { tenantId, projectId } = useWorkspaceContext();
+  const { tenantId, projectId, agentId, setAgentId } = useWorkspaceContext();
   const autoTokenEnabled = process.env.NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN === "true";
 
   // Get environment variables
@@ -281,6 +291,89 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
     }
     window.localStorage.setItem("lg:chat:apiUrl", apiUrl);
   }, [apiUrl]);
+
+  useEffect(() => {
+    if (!apiUrl) {
+      return;
+    }
+
+    if (apiUrl.includes(":8123")) {
+      setApiUrl(DEFAULT_API_URL);
+      logClient({
+        level: "warn",
+        event: "stream_runtime_url_rewritten",
+        message: "Rewrote direct runtime URL to proxy URL for CORS-safe browser access",
+        context: {
+          from: apiUrl,
+          to: DEFAULT_API_URL,
+        },
+      });
+    }
+  }, [apiUrl, setApiUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function syncExecutionTargetFromProjectScope() {
+      if (!projectId) {
+        return;
+      }
+
+      try {
+        let resolvedAgentId = agentId;
+        let resolvedGraphId: string | null = null;
+
+        if (!resolvedAgentId) {
+          const agents = await listAgents(projectId, { limit: 1, sortBy: "created_at", sortOrder: "desc" });
+          if (cancelled || agents.length === 0) {
+            return;
+          }
+          resolvedAgentId = agents[0].id;
+          resolvedGraphId = agents[0].graph_id;
+          setAgentId(resolvedAgentId);
+        }
+
+        const bindings = await listRuntimeBindings(resolvedAgentId, {
+          limit: 100,
+          sortBy: "environment",
+          sortOrder: "asc",
+        });
+        if (cancelled) {
+          return;
+        }
+
+        const preferredBinding =
+          bindings.find((item) => item.environment === DEFAULT_RUNTIME_ENV) ?? bindings[0] ?? null;
+
+        if (preferredBinding) {
+          resolvedGraphId = preferredBinding.langgraph_assistant_id;
+        }
+
+        if (resolvedGraphId && resolvedGraphId !== assistantId) {
+          setAssistantId(resolvedGraphId);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          logClient({
+            level: "warn",
+            event: "stream_scope_autolink_failed",
+            message: "Failed to auto-link chat target from project scope",
+            context: {
+              projectId,
+              agentId,
+              error: String(error),
+            },
+          });
+        }
+      }
+    }
+
+    void syncExecutionTargetFromProjectScope();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, assistantId, projectId, setAgentId, setAssistantId]);
 
   useEffect(() => {
     if (!autoTokenEnabled) {
@@ -343,7 +436,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   }, [autoTokenEnabled]);
 
   // Determine final values to use, prioritizing URL params then env vars
-  const finalApiUrl = apiUrl || envApiUrl;
+  const finalApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
   const finalAssistantId = assistantId || envAssistantId;
 
   if (autoTokenEnabled && !autoTokenReady) {

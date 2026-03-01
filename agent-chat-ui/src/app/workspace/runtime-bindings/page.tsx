@@ -11,6 +11,9 @@ import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 const PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 const ENV_OPTIONS = ["dev", "staging", "prod"] as const;
+const DEFAULT_RUNTIME_URL = "http://127.0.0.1:8123";
+const DEFAULT_ASSISTANT_ID = "assistant";
+const DEFAULT_GRAPH_ID = "assistant";
 
 type BindingForm = {
   environment: (typeof ENV_OPTIONS)[number];
@@ -21,15 +24,14 @@ type BindingForm = {
 
 const DEFAULT_BINDING_FORM: BindingForm = {
   environment: "dev",
-  assistantId: "",
-  graphId: "",
-  runtimeBaseUrl: "",
+  assistantId: DEFAULT_ASSISTANT_ID,
+  graphId: DEFAULT_GRAPH_ID,
+  runtimeBaseUrl: DEFAULT_RUNTIME_URL,
 };
 
 export default function RuntimeBindingsPage() {
-  const { projectId } = useWorkspaceContext();
+  const { projectId, agentId, setAgentId } = useWorkspaceContext();
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [agentId, setAgentId] = useState("");
   const [bindings, setBindings] = useState<RuntimeBinding[]>([]);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
@@ -83,7 +85,11 @@ export default function RuntimeBindingsPage() {
         const agentRows = await listAgents(projectId);
         if (cancelled) return;
         setAgents(agentRows);
-        setAgentId((prev) => (prev && agentRows.some((a) => a.id === prev) ? prev : (agentRows[0]?.id ?? "")));
+        if (agentRows.length === 0) {
+          setAgentId("");
+        } else if (!agentId || !agentRows.some((a) => a.id === agentId)) {
+          setAgentId(agentRows[0].id);
+        }
       } catch (err) {
         if (cancelled) return;
         setError(toUserErrorMessage(err));
@@ -98,7 +104,7 @@ export default function RuntimeBindingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [agentId, projectId, setAgentId]);
 
   useEffect(() => {
     void refreshBindings();
@@ -156,7 +162,7 @@ export default function RuntimeBindingsPage() {
   return (
     <section className="p-6">
       <h2 className="text-xl font-semibold">Runtime Bindings</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Select an agent and create/update environment bindings.</p>
+      <p className="text-muted-foreground mt-2 text-sm">Environment-specific mapping for the selected assistant profile.</p>
 
       {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
 
@@ -283,8 +289,7 @@ export default function RuntimeBindingsPage() {
               className="bg-background rounded-md border px-2 py-1 text-sm"
               placeholder="Runtime URL"
               value={bindingForm.runtimeBaseUrl}
-              onChange={(event) => setBindingForm((prev) => ({ ...prev, runtimeBaseUrl: event.target.value }))}
-              disabled={loading || submitting}
+              disabled
               required
               minLength={10}
               maxLength={512}

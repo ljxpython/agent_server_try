@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { buildLogoutUrl, startOidcLogin } from "@/lib/oidc-client";
+import { startOidcLogin } from "@/lib/oidc-client";
 import { clearOidcTokenSet, getOidcTokenSet } from "@/lib/oidc-storage";
 
 export function AuthControls() {
+  const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
   const oidcEnabled = (process.env.NEXT_PUBLIC_OIDC_ENABLED ?? "false") === "true";
 
@@ -24,8 +26,7 @@ export function AuthControls() {
       className="bg-background rounded-md border px-3 py-1 text-sm"
       onClick={() => {
         clearOidcTokenSet();
-        const url = buildLogoutUrl(`${window.location.origin}/auth/login`);
-        window.location.href = url;
+        router.replace("/auth/login");
       }}
     >
       Sign out

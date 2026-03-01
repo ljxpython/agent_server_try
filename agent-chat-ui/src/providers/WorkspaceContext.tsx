@@ -13,6 +13,8 @@ type WorkspaceContextValue = {
   setTenantId: (value: string) => void;
   projectId: string;
   setProjectId: (value: string) => void;
+  agentId: string;
+  setAgentId: (value: string) => void;
   tenants: Tenant[];
   projects: Project[];
   loading: boolean;
@@ -26,6 +28,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   });
   const [projectId, setProjectId] = useQueryState("projectId", {
     defaultValue: process.env.NEXT_PUBLIC_PROJECT_ID ?? "",
+  });
+  const [agentId, setAgentId] = useQueryState("agentId", {
+    defaultValue: "",
   });
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -118,14 +123,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setTenantId: (value: string) => {
         setTenantId(value);
         setProjectId("");
+        setAgentId("");
       },
       projectId: projectId ?? "",
-      setProjectId,
+      setProjectId: (value: string) => {
+        setProjectId(value);
+        setAgentId("");
+      },
+      agentId: agentId ?? "",
+      setAgentId,
       tenants,
       projects,
       loading,
     }),
-    [loading, projectId, projects, setProjectId, setTenantId, tenantId, tenants],
+    [agentId, loading, projectId, projects, setAgentId, setProjectId, setTenantId, tenantId, tenants],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
