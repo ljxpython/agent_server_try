@@ -153,6 +153,13 @@ def delete_project(session: Session, project: Project) -> None:
     session.flush()
 
 
+def update_project(session: Session, project: Project, name: str) -> Project:
+    project.name = name
+    session.add(project)
+    session.flush()
+    return project
+
+
 def list_agents_for_project(
     session: Session,
     project_id: uuid.UUID,

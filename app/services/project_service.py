@@ -12,6 +12,7 @@ from app.db.access import (
     list_agents_for_tenant,
     list_projects_for_tenant,
     parse_uuid,
+    update_project,
 )
 from app.db.session import session_scope
 from app.services.platform_common import (
@@ -105,3 +106,28 @@ async def delete_project_by_id(request: Request, project_id: str) -> dict[str, A
         await remove_project_fga(request, project_id=str(project.id), tenant_id=str(project.tenant_id))
         delete_project(session, project)
         return {"deleted": True, "project_id": str(project_uuid)}
+
+
+async def update_project_by_id(request: Request, project_id: str, name: str) -> dict[str, str]:
+    acting_user_id = current_user_id_from_request(request)
+    project_uuid = parse_uuid(project_id)
+    if project_uuid is None:
+        raise HTTPException(status_code=400, detail="Invalid project_id")
+
+    session_factory = db_session_factory_from_request(request)
+    with session_scope(session_factory) as session:
+        project = get_project(session, project_uuid)
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
+        updated = update_project(session, project=project, name=name)
+        return {
+            "id": str(updated.id),
+            "tenant_id": str(updated.tenant_id),
+            "name": updated.name,
+        }

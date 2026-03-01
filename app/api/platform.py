@@ -25,6 +25,7 @@ from app.services.platform_service import (
     remove_membership_from_tenant,
     upsert_agent_binding_by_agent_id,
     update_agent_by_id,
+    update_project_by_id,
 )
 
 
@@ -65,6 +66,10 @@ class DeleteMembershipResponse(BaseModel):
 
 class CreateProjectRequest(BaseModel):
     tenant_id: str
+    name: str = Field(min_length=2, max_length=128)
+
+
+class UpdateProjectRequest(BaseModel):
     name: str = Field(min_length=2, max_length=128)
 
 
@@ -263,6 +268,18 @@ async def delete_project_endpoint(request: Request, project_id: str):
     return await delete_project_by_id(request, project_id)
 
 
+@router.patch("/projects/{project_id}", response_model=ProjectResponse)
+async def update_project_endpoint(request: Request, project_id: str, payload: UpdateProjectRequest):
+    logger.info(
+        "platform_update_project request_id=%s project_id=%s name=%s",
+        getattr(request.state, "request_id", "-"),
+        project_id,
+        payload.name,
+    )
+    row = await update_project_by_id(request, project_id, payload.name)
+    return ProjectResponse(**row)
+
+
 @router.get("/projects/{project_id}/agents", response_model=list[AgentResponse])
 async def list_agents(
     request: Request,
@@ -384,7 +401,10 @@ async def delete_runtime_binding_endpoint(request: Request, agent_id: str, bindi
         binding_id,
     )
     row = await delete_runtime_binding_by_id(request, agent_id=agent_id, binding_id=binding_id)
-    return DeleteRuntimeBindingResponse(**row)
+    return DeleteRuntimeBindingResponse(
+        deleted=bool(row.get("deleted")),
+        binding_id=str(row.get("binding_id", "")),
+    )
 
 
 @router.get("/tenants/{tenant_ref}/audit-logs", response_model=AuditLogListResponse)

@@ -17,7 +17,12 @@ from app.services.binding_service import (
     upsert_agent_binding_by_agent_id,
 )
 from app.services.membership_service import add_membership_to_tenant, remove_membership_from_tenant
-from app.services.project_service import create_project_for_tenant, delete_project_by_id, list_projects_for_tenant_ref
+from app.services.project_service import (
+    create_project_for_tenant,
+    delete_project_by_id,
+    list_projects_for_tenant_ref,
+    update_project_by_id,
+)
 from app.services.tenant_service import create_tenant_for_current_user, list_my_tenants
 
 
@@ -39,4 +44,5 @@ __all__ = [
     "remove_membership_from_tenant",
     "upsert_agent_binding_by_agent_id",
     "update_agent_by_id",
+    "update_project_by_id",
 ]

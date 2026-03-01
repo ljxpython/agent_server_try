@@ -110,6 +110,28 @@ def test_delete_project_400_contract(monkeypatch):
     assert resp.json()["detail"] == "Invalid project_id"
 
 
+def test_update_project_contract(monkeypatch):
+    async def fake_update_project(*args, **kwargs):
+        return {
+            "id": "project-1",
+            "tenant_id": "tenant-1",
+            "name": "Project Renamed",
+        }
+
+    monkeypatch.setattr("app.api.platform.update_project_by_id", fake_update_project)
+
+    payload = {"name": "Project Renamed"}
+    with _build_client() as client:
+        resp = client.patch("/_platform/projects/project-1", json=payload)
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "id": "project-1",
+        "tenant_id": "tenant-1",
+        "name": "Project Renamed",
+    }
+
+
 def test_create_agent_403_contract(monkeypatch):
     async def fake_create_agent(*args, **kwargs):
         raise HTTPException(status_code=403, detail="Only owner/admin can perform this action")
