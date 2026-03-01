@@ -10,8 +10,8 @@ import { ScopeSwitcher } from "./scope-switcher";
 const NAV_ITEMS = [
   { href: "/workspace/chat", label: "Chat" },
   { href: "/workspace/projects", label: "Projects" },
-  { href: "/workspace/agents", label: "Agents" },
-  { href: "/workspace/runtime-bindings", label: "Runtime" },
+  { href: "/workspace/agents", label: "Assistants" },
+  { href: "/workspace/runtime-bindings", label: "Environments" },
   { href: "/workspace/audit", label: "Audit" },
   { href: "/workspace/stats", label: "Stats" },
 ];
