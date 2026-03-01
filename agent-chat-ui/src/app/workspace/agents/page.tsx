@@ -119,7 +119,7 @@ export default function AgentsPage() {
           runtime_base_url: form.runtimeBaseUrl.trim(),
           description: form.description.trim(),
         });
-        setNotice(`Updated agent: ${updated.name}`);
+        setNotice(`Updated assistant profile: ${updated.name}`);
       } else {
         const created = await createAgent({
           project_id: projectId,
@@ -128,7 +128,7 @@ export default function AgentsPage() {
           runtime_base_url: form.runtimeBaseUrl.trim(),
           description: form.description.trim(),
         });
-        setNotice(`Created agent: ${created.name}`);
+        setNotice(`Created assistant profile: ${created.name}`);
         setOffset(0);
         setAgentId(created.id);
       }
@@ -153,7 +153,7 @@ export default function AgentsPage() {
       if (agentId === agent.id) {
         setAgentId("");
       }
-      setNotice(`Deleted agent: ${agent.name}`);
+      setNotice(`Deleted assistant profile: ${agent.name}`);
       await refreshList();
     } catch (err) {
       setError(toUserErrorMessage(err));
@@ -166,18 +166,18 @@ export default function AgentsPage() {
 
   return (
     <section className="p-6">
-      <h2 className="text-xl font-semibold">Agents</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Project-scoped assistant profile list and write operations.</p>
+      <h2 className="text-xl font-semibold">Assistants</h2>
+      <p className="text-muted-foreground mt-2 text-sm">Project-scoped assistant profiles. Chat runs use selected assistant_id.</p>
 
       {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
 
       {projectId ? (
         <form className="mt-4 grid gap-2 rounded-md border p-3" onSubmit={onSubmit}>
-          <h3 className="text-sm font-medium">{editingId ? "Update agent" : "Create agent"}</h3>
+          <h3 className="text-sm font-medium">{editingId ? "Update assistant profile" : "Create assistant profile"}</h3>
           <div className="grid gap-2 md:grid-cols-2">
             <input
               className="bg-background rounded-md border px-2 py-1 text-sm"
-              placeholder="Agent name"
+              placeholder="Assistant profile name"
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
               disabled={actionDisabled}
@@ -202,7 +202,7 @@ export default function AgentsPage() {
                   <option key={value} value={value} />
                 ))}
               </datalist>
-              <p className="text-muted-foreground text-xs">默认使用 assistant；也可输入已有 graph id。</p>
+              <p className="text-muted-foreground text-xs">Graph ID 对应已部署图；Chat 最终执行使用 assistant_id。</p>
             </div>
             <input
               className="bg-background rounded-md border px-2 py-1 text-sm"

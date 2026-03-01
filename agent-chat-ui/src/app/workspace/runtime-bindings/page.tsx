@@ -124,7 +124,7 @@ export default function RuntimeBindingsPage() {
         langgraph_graph_id: bindingForm.graphId.trim(),
         runtime_base_url: bindingForm.runtimeBaseUrl.trim(),
       });
-      setNotice(`Saved binding: ${saved.environment}`);
+      setNotice(`Saved environment mapping: ${saved.environment}`);
       await refreshBindings();
     } catch (err) {
       setError(toUserErrorMessage(err));
@@ -140,7 +140,7 @@ export default function RuntimeBindingsPage() {
     setNotice(null);
     try {
       await deleteRuntimeBinding(agentId, binding.id);
-      setNotice(`Deleted binding: ${binding.environment}`);
+      setNotice(`Deleted environment mapping: ${binding.environment}`);
       await refreshBindings();
     } catch (err) {
       setError(toUserErrorMessage(err));
@@ -156,27 +156,27 @@ export default function RuntimeBindingsPage() {
       graphId: binding.langgraph_graph_id,
       runtimeBaseUrl: binding.runtime_base_url,
     });
-    setNotice(`Editing binding: ${binding.environment}`);
+    setNotice(`Editing environment mapping: ${binding.environment}`);
   }
 
   return (
     <section className="p-6">
-      <h2 className="text-xl font-semibold">Runtime Bindings</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Environment-specific mapping for the selected assistant profile.</p>
+      <h2 className="text-xl font-semibold">Environments</h2>
+      <p className="text-muted-foreground mt-2 text-sm">Environment endpoint mapping for the selected assistant profile.</p>
 
       {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
 
       {projectId ? (
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <label className="text-sm">
-            <span className="text-muted-foreground mr-2">Agent</span>
+            <span className="text-muted-foreground mr-2">Assistant profile</span>
             <select
               className="bg-background rounded-md border px-2 py-1"
               value={agentId}
               onChange={(event) => setAgentId(event.target.value)}
               disabled={loading || agents.length === 0}
             >
-              <option value="">Select agent</option>
+              <option value="">Select assistant profile</option>
               {agents.map((agent) => (
                 <option key={agent.id} value={agent.id}>
                   {agent.name}
@@ -249,7 +249,7 @@ export default function RuntimeBindingsPage() {
 
       {projectId && agentId ? (
         <form className="mt-4 grid gap-2 rounded-md border p-3" onSubmit={onUpsertBinding}>
-          <h3 className="text-sm font-medium">Create / Update binding</h3>
+          <h3 className="text-sm font-medium">Create / Update environment mapping</h3>
           <div className="grid gap-2 md:grid-cols-2">
             <select
               className="bg-background rounded-md border px-2 py-1 text-sm"

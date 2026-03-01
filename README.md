@@ -96,6 +96,7 @@ curl http://127.0.0.1:2024/_proxy/health
 - `docs/postgres-operations.md`
 - `docs/code-architecture.md`
 - `docs/keycloak-integration.md`
+- `docs/langgraph-official-usage.md`
 - `docs/platform-api.md`
 - `docs/openfga-integration.md`
 
