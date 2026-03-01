@@ -64,3 +64,9 @@ curl http://127.0.0.1:2024/_proxy/health
 - `docs/keycloak-integration.md`
 - `docs/platform-api.md`
 - `docs/openfga-integration.md`
+
+## Environment templates
+
+- `config/environments/.env.dev.example`
+- `config/environments/.env.staging.example`
+- `config/environments/.env.prod.example`

@@ -14,6 +14,7 @@
 - `docs/frontend-platform-plan.md`：前端平台化改造方案（IA、分阶段迁移、风险与落地清单）。
 - `docs/server-migration-guide.md`：服务器迁移手册（PostgreSQL + Keycloak + OpenFGA）。
 - `docs/logging-system.md`：前后端日志系统说明（落盘路径、关键埋点、验证步骤）。
+- `docs/ci-troubleshooting.md`：CI 失败诊断与本地复现指引。
 
 ## 文档约定
 
