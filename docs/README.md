@@ -11,6 +11,9 @@
 - `docs/openfga-integration.md`：OpenFGA 启动、初始化与授权接入说明。
 - `docs/error-playbook.md`：已遇到问题与修复手册（防踩坑）。
 - `docs/testing.md`：自动化冒烟测试脚本与运行方式。
+- `docs/frontend-platform-plan.md`：前端平台化改造方案（IA、分阶段迁移、风险与落地清单）。
+- `docs/server-migration-guide.md`：服务器迁移手册（PostgreSQL + Keycloak + OpenFGA）。
+- `docs/logging-system.md`：前后端日志系统说明（落盘路径、关键埋点、验证步骤）。
 
 ## 文档约定
 

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+
+
+logger = logging.getLogger("proxy.openfga")
 
 
 @dataclass(frozen=True)
@@ -15,6 +19,7 @@ class OpenFgaSettings:
     base_url: str
     store_id: str | None
     model_id: str | None
+    model_file: str
 
 
 class OpenFgaClient:
@@ -32,12 +37,14 @@ class OpenFgaClient:
         if not self.settings.enabled:
             return
         if self.settings.auto_bootstrap:
-            await self.bootstrap_from_file(Path("config/openfga-model.json"))
+            await self.bootstrap_from_file(Path(self.settings.model_file))
         if not self.store_id or not self.model_id:
+            logger.error("openfga_not_configured store_id=%s model_id=%s", self.store_id, self.model_id)
             raise RuntimeError("OpenFGA store/model is not configured")
 
     async def bootstrap_from_file(self, model_file: Path) -> None:
         if not model_file.exists():
+            logger.error("openfga_model_file_missing file=%s", model_file)
             raise RuntimeError(f"OpenFGA model file not found: {model_file}")
 
         model_payload = json.loads(model_file.read_text())
@@ -49,18 +56,27 @@ class OpenFgaClient:
                 json={"name": store_name},
             )
             if created.status_code not in {200, 201}:
+                logger.error("openfga_create_store_failed status=%s body=%s", created.status_code, created.text)
                 raise RuntimeError(f"OpenFGA create store failed: {created.status_code} {created.text}")
             self.store_id = created.json()["id"]
+            logger.info("openfga_store_created store_id=%s", self.store_id)
 
         write_model = await self._client.post(
             f"{self.base_url}/stores/{self.store_id}/authorization-models",
             json=model_payload,
         )
         if write_model.status_code not in {200, 201}:
+            logger.error(
+                "openfga_write_model_failed status=%s body=%s store_id=%s",
+                write_model.status_code,
+                write_model.text,
+                self.store_id,
+            )
             raise RuntimeError(
                 f"OpenFGA write model failed: {write_model.status_code} {write_model.text}"
             )
         self.model_id = write_model.json()["authorization_model_id"]
+        logger.info("openfga_model_written store_id=%s model_id=%s", self.store_id, self.model_id)
 
     async def write_tuple(self, user: str, relation: str, obj: str) -> None:
         await self.write_tuples([
@@ -82,6 +98,12 @@ class OpenFgaClient:
             json=payload,
         )
         if response.status_code not in {200, 201}:
+            logger.error(
+                "openfga_write_tuple_failed status=%s tuple_count=%s body=%s",
+                response.status_code,
+                len(tuples),
+                response.text,
+            )
             raise RuntimeError(f"OpenFGA write tuple failed: {response.status_code} {response.text}")
 
     async def delete_tuples(self, tuples: list[dict[str, str]]) -> None:
@@ -102,6 +124,12 @@ class OpenFgaClient:
             return
         if response.status_code == 400 and "tuple to be deleted did not exist" in response.text:
             return
+        logger.error(
+            "openfga_delete_tuple_failed status=%s tuple_count=%s body=%s",
+            response.status_code,
+            len(tuples),
+            response.text,
+        )
         raise RuntimeError(f"OpenFGA delete tuple failed: {response.status_code} {response.text}")
 
     async def delete_tuple(self, user: str, relation: str, obj: str) -> None:
@@ -126,6 +154,14 @@ class OpenFgaClient:
             json=payload,
         )
         if response.status_code != 200:
+            logger.error(
+                "openfga_check_failed status=%s user=%s relation=%s object=%s body=%s",
+                response.status_code,
+                user,
+                relation,
+                obj,
+                response.text,
+            )
             raise RuntimeError(f"OpenFGA check failed: {response.status_code} {response.text}")
         return bool(response.json().get("allowed", False))
 

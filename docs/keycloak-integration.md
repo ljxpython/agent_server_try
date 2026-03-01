@@ -99,6 +99,106 @@ curl -i -H "Authorization: Bearer $TOKEN" http://127.0.0.1:2024/info
 
 预期：`200`，响应头包含 `x-user-subject`
 
+## 免重复输入：自动获取并缓存 token（推荐）
+
+如果你不想每次都手写 `curl`，可以直接使用脚本：`scripts/keycloak_token.py`。
+
+### 1) 一次性配置凭据（写入本地 shell 配置）
+
+```bash
+export KEYCLOAK_TOKEN_USERNAME=demo_user
+export KEYCLOAK_TOKEN_PASSWORD=Demo@123456
+```
+
+可选覆盖项（不配也能用默认值）：
+
+```bash
+export KEYCLOAK_CLIENT_ID=agent-proxy
+export KEYCLOAK_TOKEN_URL="http://127.0.0.1:18080/realms/agent-platform/protocol/openid-connect/token"
+```
+
+### 2) 获取 token（自动缓存，默认缓存到 `.cache/keycloak_token.json`）
+
+```bash
+TOKEN=$(uv run python scripts/keycloak_token.py)
+```
+
+然后照常调用：
+
+```bash
+curl -i -H "Authorization: Bearer $TOKEN" http://127.0.0.1:2024/info
+```
+
+### 3) 一行调用（不落 TOKEN 变量）
+
+```bash
+curl -i -H "$(uv run python scripts/keycloak_token.py --auth-header)" http://127.0.0.1:2024/info
+```
+
+说明：
+
+- 脚本会优先使用未过期缓存 token。
+- token 临近过期（默认 30 秒）会自动刷新。
+- 可以用 `KEYCLOAK_TOKEN_CACHE_FILE` 自定义缓存文件路径。
+
+## 前端免手填 token（agent-chat-ui）
+
+如果希望前端页面也不需要每次输入 token，可启用前端内置 token 代理：
+
+### 1) 在 `agent-chat-ui/.env` 配置
+
+```env
+NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN=true
+KEYCLOAK_TOKEN_PROXY_ENABLED=true
+
+# 下面几项用于服务端路由向 Keycloak 换取 token
+KEYCLOAK_TOKEN_URL=http://127.0.0.1:18080/realms/agent-platform/protocol/openid-connect/token
+KEYCLOAK_CLIENT_ID=agent-proxy
+KEYCLOAK_TOKEN_USERNAME=demo_user
+KEYCLOAK_TOKEN_PASSWORD=Demo@123456
+```
+
+### 2) 启动前端
+
+```bash
+cd agent-chat-ui
+pnpm dev
+```
+
+效果：
+
+- 前端会调用 `/api/keycloak-token` 自动获取并缓存 token。
+- `StreamProvider/ThreadProvider` 会自动复用该 token，无需手工填 API Key。
+- token 临近过期会自动刷新。
+- 自动模式会在页面启动时覆盖旧缓存 token，避免因历史无效 token 导致持续 `401 invalid_token`。
+
+> 提醒：该模式适合本地开发或内网环境。生产建议改为标准 OIDC 登录态（避免在前端服务配置固定用户名密码）。
+
+### 前端仍然出现 `401 invalid_token` 的快速排查
+
+1. 检查后端 `.env`：`KEYCLOAK_AUDIENCE=agent-proxy`。
+2. 检查前端 `.env`：`NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN=true` 且 `KEYCLOAK_TOKEN_PROXY_ENABLED=true`。
+3. 打开浏览器访问 `http://localhost:3000/api/keycloak-token`，确认能拿到 `access_token`。
+4. 若仍失败，清一次浏览器 localStorage 键：`lg:chat:apiKey` 后刷新页面。
+5. 用命令行验证同一 token 能过后端：
+
+```bash
+TOKEN=$(uv run python scripts/keycloak_token.py)
+curl -i -H "Authorization: Bearer $TOKEN" http://127.0.0.1:2024/info
+```
+
+如果第 5 步是 `200`，但前端仍 `401`，通常是前端环境变量未生效（需要重启 `pnpm dev`）。
+
+## 已确认的后续计划（暂不在本轮实施）
+
+我们已确认：
+
+1. 当前保留“自动获取 token”模式用于本地开发提效。
+2. 后续版本会移除固定 `username/password` 方案，改为标准 Keycloak 浏览器登录流（OIDC Authorization Code + PKCE）。
+3. 浏览器登录流落地后，前端不再依赖 `KEYCLOAK_TOKEN_USERNAME/KEYCLOAK_TOKEN_PASSWORD`。
+
+本章节用于记录决策，避免后续重复讨论。
+
 ## 重要：两条“必须重做”
 
 1. 你修改了 Keycloak 的 Audience Mapper 后，**必须重新获取一枚新 token**（旧 token 不会自动更新 `aud`）。

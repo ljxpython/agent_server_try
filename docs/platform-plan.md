@@ -55,6 +55,15 @@
 - 版本发布与回滚元数据。
 - 成本归因看板（租户/项目/智能体）。
 
+### 第六阶段：前端平台化改造（规划完成）
+
+- 基于 `agent-chat-ui` 进行渐进改造，不做重写。
+- 拆分平台壳与聊天壳：`租户/项目` 上下文前置到全局。
+- 新增平台页面：`agents/runtime-bindings/audit/stats/export/settings`。
+- 统一平台 API 封装层（BFF-lite 转发 + 错误/分页规范）。
+- 已完成第一条关键链路：运行时请求自动注入 `x-tenant-id` / `x-project-id`。
+- 详见：`docs/frontend-platform-plan.md`。
+
 ## PostgreSQL 核心表（初版）
 
 - `tenants(id, name, slug, status, created_at)`
@@ -67,4 +76,4 @@
 
 ## 当前里程碑结论
 
-第二阶段已落地完成，第三阶段已进入 API 与数据模型实施阶段。
+第二至第四阶段核心后端能力已完成并可用，已进入前端平台化改造阶段。

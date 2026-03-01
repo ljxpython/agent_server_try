@@ -1,12 +1,15 @@
-import React, {
+import {
   createContext,
+  type FC,
+  type ReactNode,
+  useCallback,
   useContext,
-  ReactNode,
-  useState,
   useEffect,
+  useMemo,
+  useState,
 } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
-import { type Message } from "@langchain/langgraph-sdk";
+import type { Message } from "@langchain/langgraph-sdk";
 import {
   uiMessageReducer,
   isUIMessage,
@@ -22,7 +25,10 @@ import { Label } from "@/components/ui/label";
 import { ArrowRight } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
+import { logClient } from "@/lib/client-logger";
+import { isJwtToken } from "@/lib/token";
 import { useThreads } from "./Thread";
+import { useWorkspaceContext } from "./WorkspaceContext";
 import { toast } from "sonner";
 
 export type StateType = { messages: Message[]; ui?: UIMessage[] };
@@ -48,21 +54,53 @@ async function sleep(ms = 4000) {
 
 async function checkGraphStatus(
   apiUrl: string,
-  apiKey: string | null,
+  authHeaders: Record<string, string>,
 ): Promise<boolean> {
   try {
     const res = await fetch(`${apiUrl}/info`, {
-      ...(apiKey && {
-        headers: {
-          "X-Api-Key": apiKey,
-        },
-      }),
+      headers: authHeaders,
     });
 
     return res.ok;
   } catch (e) {
-    console.error(e);
+    await logClient({
+      level: "error",
+      event: "stream_check_graph_status_error",
+      message: "Failed to check graph status",
+      context: {
+        apiUrl,
+        error: String(e),
+      },
+    });
     return false;
+  }
+}
+
+async function fetchAutoToken(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/keycloak-token", {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return null;
+    }
+
+    const payload = (await res.json()) as { access_token?: string };
+    if (!payload.access_token) {
+      return null;
+    }
+    return payload.access_token;
+  } catch (error) {
+    await logClient({
+      level: "error",
+      event: "stream_auto_token_fetch_error",
+      message: "Failed to fetch auto token",
+      context: {
+        error: String(error),
+      },
+    });
+    return null;
   }
 }
 
@@ -71,17 +109,52 @@ const StreamSession = ({
   apiKey,
   apiUrl,
   assistantId,
+  tenantId,
+  projectId,
+  autoTokenEnabled,
 }: {
   children: ReactNode;
   apiKey: string | null;
   apiUrl: string;
   assistantId: string;
+  tenantId: string;
+  projectId: string;
+  autoTokenEnabled: boolean;
 }) => {
   const [threadId, setThreadId] = useQueryState("threadId");
   const { getThreads, setThreads } = useThreads();
+  const runtimeHeaders = useMemo<Record<string, string>>(
+    () => ({
+      ...(tenantId ? { "x-tenant-id": tenantId } : {}),
+      ...(projectId ? { "x-project-id": projectId } : {}),
+    }),
+    [tenantId, projectId],
+  );
+
+  const authHeaders = useMemo<Record<string, string>>(() => {
+    if (isJwtToken(apiKey)) {
+      return {
+        Authorization: `Bearer ${apiKey}`,
+        ...runtimeHeaders,
+      };
+    }
+
+    if (apiKey && !autoTokenEnabled) {
+      return {
+        "X-Api-Key": apiKey,
+        ...runtimeHeaders,
+      };
+    }
+
+    return runtimeHeaders;
+  }, [apiKey, runtimeHeaders, autoTokenEnabled]);
+
+  const streamApiKey = isJwtToken(apiKey) ? undefined : apiKey ?? undefined;
+
   const streamValue = useTypedStream({
     apiUrl,
-    apiKey: apiKey ?? undefined,
+    apiKey: streamApiKey,
+    defaultHeaders: authHeaders,
     assistantId,
     threadId: threadId ?? null,
     fetchStateHistory: true,
@@ -95,15 +168,45 @@ const StreamSession = ({
     },
     onThreadId: (id) => {
       setThreadId(id);
-      // Refetch threads list when thread ID changes.
-      // Wait for some seconds before fetching so we're able to get the new thread that was created.
-      sleep().then(() => getThreads().then(setThreads).catch(console.error));
+      logClient({
+        level: "info",
+        event: "stream_thread_id_changed",
+        message: "Thread id updated from stream callback",
+        context: {
+          threadId: id,
+          assistantId,
+        },
+      });
+      sleep().then(() =>
+        getThreads()
+          .then(setThreads)
+          .catch((error) =>
+            logClient({
+              level: "error",
+              event: "stream_refresh_threads_error",
+              message: "Failed to refresh threads after thread id change",
+              context: {
+                threadId: id,
+                error: String(error),
+              },
+            }),
+          ),
+      );
     },
   });
 
   useEffect(() => {
-    checkGraphStatus(apiUrl, apiKey).then((ok) => {
+    checkGraphStatus(apiUrl, authHeaders).then((ok) => {
       if (!ok) {
+        logClient({
+          level: "warn",
+          event: "stream_graph_status_unhealthy",
+          message: "Graph status check failed",
+          context: {
+            apiUrl,
+            assistantId,
+          },
+        });
         toast.error("Failed to connect to LangGraph server", {
           description: () => (
             <p>
@@ -117,7 +220,7 @@ const StreamSession = ({
         });
       }
     });
-  }, [apiKey, apiUrl]);
+  }, [apiUrl, assistantId, authHeaders]);
 
   return (
     <StreamContext.Provider value={streamValue}>
@@ -128,11 +231,14 @@ const StreamSession = ({
 
 // Default values for the form
 const DEFAULT_API_URL = "http://localhost:2024";
-const DEFAULT_ASSISTANT_ID = "agent";
+const DEFAULT_ASSISTANT_ID = "assistant";
 
-export const StreamProvider: React.FC<{ children: ReactNode }> = ({
+export const StreamProvider: FC<{ children: ReactNode }> = ({
   children,
 }) => {
+  const { tenantId, projectId } = useWorkspaceContext();
+  const autoTokenEnabled = process.env.NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN === "true";
+
   // Get environment variables
   const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
   const envAssistantId: string | undefined =
@@ -151,15 +257,95 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
     const storedKey = getApiKey();
     return storedKey || "";
   });
+  const [autoTokenReady, setAutoTokenReady] = useState(!autoTokenEnabled);
 
-  const setApiKey = (key: string) => {
+  const setApiKey = useCallback((key: string) => {
     window.localStorage.setItem("lg:chat:apiKey", key);
     _setApiKey(key);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!envAssistantId && assistantId === "agent") {
+      setAssistantId(DEFAULT_ASSISTANT_ID);
+      logClient({
+        level: "warn",
+        event: "stream_assistant_id_migrated",
+        message: "Migrated legacy assistantId 'agent' to 'assistant'",
+      });
+    }
+  }, [assistantId, envAssistantId, setAssistantId]);
+
+  useEffect(() => {
+    if (!autoTokenEnabled) {
+      return;
+    }
+
+    let cancelled = false;
+    setAutoTokenReady(false);
+
+    fetchAutoToken().then((token) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (token) {
+        setApiKey(token);
+        logClient({
+          level: "info",
+          event: "stream_auto_token_loaded",
+          message: "Loaded token in auto mode",
+        });
+      }
+
+      setAutoTokenReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoTokenEnabled, setApiKey]);
+
+  useEffect(() => {
+    if (!autoTokenEnabled) {
+      return;
+    }
+
+    const id = window.setInterval(() => {
+      fetchAutoToken().then((token) => {
+        if (!token) {
+          return;
+        }
+        _setApiKey((prev) => {
+          if (prev === token) {
+            return prev;
+          }
+          window.localStorage.setItem("lg:chat:apiKey", token);
+          logClient({
+            level: "info",
+            event: "stream_auto_token_refreshed",
+            message: "Refreshed token in auto mode",
+          });
+          return token;
+        });
+      });
+    }, 5 * 60 * 1000);
+
+    return () => {
+      window.clearInterval(id);
+    };
+  }, [autoTokenEnabled]);
 
   // Determine final values to use, prioritizing URL params then env vars
   const finalApiUrl = apiUrl || envApiUrl;
   const finalAssistantId = assistantId || envAssistantId;
+
+  if (autoTokenEnabled && !autoTokenReady) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center p-4">
+        <div className="text-muted-foreground text-sm">Loading authentication...</div>
+      </div>
+    );
+  }
 
   // Show the form if we: don't have an API URL, or don't have an assistant ID
   if (!finalApiUrl || !finalAssistantId) {
@@ -239,6 +425,12 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
                 is only used to authenticate requests sent to your LangGraph
                 server.
               </p>
+              {autoTokenEnabled ? (
+                <p className="text-xs text-emerald-700">
+                  Auto token mode is enabled. Keycloak token is fetched from
+                  <code> /api/keycloak-token</code> automatically.
+                </p>
+              ) : null}
               <PasswordInput
                 id="apiKey"
                 name="apiKey"
@@ -266,8 +458,11 @@ export const StreamProvider: React.FC<{ children: ReactNode }> = ({
   return (
     <StreamSession
       apiKey={apiKey}
-      apiUrl={apiUrl}
-      assistantId={assistantId}
+      apiUrl={finalApiUrl}
+      assistantId={finalAssistantId}
+      tenantId={tenantId}
+      projectId={projectId}
+      autoTokenEnabled={autoTokenEnabled}
     >
       {children}
     </StreamSession>

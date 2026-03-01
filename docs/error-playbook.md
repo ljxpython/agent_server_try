@@ -92,6 +92,18 @@
 - 修复：删除接口对该错误容忍（幂等化）。
 - 验证：重复删除不再导致 500。
 
+### 12) `auth_invalid_token` + `Invalid payload padding`
+
+- 现象：后端日志出现 `token_source=x-api-key error=Invalid payload padding`，`/info` 返回 401。
+- 根因：前端把非 JWT 值（如旧 LangSmith key）放在 `X-Api-Key`，后端在 Keycloak 模式下按 JWT 验签失败。
+- 修复：
+  - 前端在自动 Keycloak token 模式下，不再把非 JWT 值当 `X-Api-Key` 发送。
+  - 若是 JWT，则优先走 `Authorization: Bearer <token>`。
+  - `ThreadProvider` 在自动模式下忽略非 JWT 的本地缓存 key。
+- 验证：
+  - `/info` 不再出现 `Invalid payload padding`。
+  - `/threads/search` 与运行时请求保持 200（或明确的权限状态码）。
+
 ## 快速排查顺序（推荐）
 
 1. 先看后端状态码是否为 401/403（鉴权问题优先）。

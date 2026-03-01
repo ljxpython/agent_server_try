@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -7,6 +9,9 @@ from app.config import Settings
 from app.db.access import get_membership, get_user_by_external_subject, parse_uuid, resolve_tenant, upsert_user_from_subject
 from app.db.models import User
 from app.db.session import session_scope
+
+
+logger = logging.getLogger("proxy.tenant")
 
 
 def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None:
@@ -20,10 +25,25 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
         user_subject = getattr(request.state, "user_subject", None)
         auth_claims = getattr(request.state, "auth_claims", None) or {}
 
+        logger.debug(
+            "tenant_context_started request_id=%s path=%s method=%s tenant_header=%s user_id_header=%s user_subject=%s",
+            getattr(request.state, "request_id", "-"),
+            request.url.path,
+            request.method,
+            tenant_id,
+            user_id,
+            user_subject,
+        )
+
         if not user_id and user_subject:
             user_id = str(user_subject)
 
         if settings.require_tenant_context and not tenant_id:
+            logger.warning(
+                "tenant_context_required_missing request_id=%s path=%s",
+                getattr(request.state, "request_id", "-"),
+                request.url.path,
+            )
             return JSONResponse(
                 status_code=400,
                 content={
@@ -42,6 +62,11 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
         if settings.platform_db_enabled:
             session_factory = getattr(request.app.state, "db_session_factory", None)
             if session_factory is None:
+                logger.error(
+                    "tenant_db_misconfigured request_id=%s path=%s",
+                    getattr(request.state, "request_id", "-"),
+                    request.url.path,
+                )
                 return JSONResponse(
                     status_code=500,
                     content={
@@ -72,6 +97,11 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
                 if tenant_id:
                     tenant = resolve_tenant(session, tenant_id)
                     if tenant is None:
+                        logger.warning(
+                            "tenant_resolve_denied request_id=%s tenant_ref=%s",
+                            getattr(request.state, "request_id", "-"),
+                            tenant_id,
+                        )
                         return JSONResponse(
                             status_code=403,
                             content={
@@ -86,6 +116,11 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
                     resolved_tenant_id = str(tenant.id)
 
                     if user is None:
+                        logger.warning(
+                            "tenant_access_user_missing request_id=%s tenant_id=%s",
+                            getattr(request.state, "request_id", "-"),
+                            resolved_tenant_id,
+                        )
                         return JSONResponse(
                             status_code=401,
                             content={
@@ -101,6 +136,12 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
 
                     membership = get_membership(session, tenant.id, user.id)
                     if membership is None:
+                        logger.warning(
+                            "tenant_membership_missing request_id=%s tenant_id=%s user_id=%s",
+                            getattr(request.state, "request_id", "-"),
+                            resolved_tenant_id,
+                            user.id,
+                        )
                         return JSONResponse(
                             status_code=403,
                             content={
@@ -113,6 +154,13 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
                             },
                         )
                     membership_role = membership.role
+                    logger.info(
+                        "tenant_membership_ok request_id=%s tenant_id=%s user_id=%s role=%s",
+                        getattr(request.state, "request_id", "-"),
+                        resolved_tenant_id,
+                        user.id,
+                        membership_role,
+                    )
 
                 if user is not None:
                     user_id = str(user.id)
@@ -120,6 +168,14 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
         request.state.tenant_id = resolved_tenant_id
         request.state.user_id = user_id
         request.state.membership_role = membership_role
+
+        logger.debug(
+            "tenant_context_resolved request_id=%s tenant_id=%s user_id=%s role=%s",
+            getattr(request.state, "request_id", "-"),
+            resolved_tenant_id,
+            user_id,
+            membership_role,
+        )
 
         response = await call_next(request)
         if resolved_tenant_id:

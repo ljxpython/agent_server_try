@@ -1,5 +1,7 @@
 import { validate } from "uuid";
 import { getApiKey } from "@/lib/api-key";
+import { logClient } from "@/lib/client-logger";
+import { isJwtToken } from "@/lib/token";
 import { Thread } from "@langchain/langgraph-sdk";
 import { useQueryState } from "nuqs";
 import {
@@ -12,6 +14,7 @@ import {
   SetStateAction,
 } from "react";
 import { createClient } from "./client";
+import { useWorkspaceContext } from "./WorkspaceContext";
 
 interface ThreadContextType {
   getThreads: () => Promise<Thread[]>;
@@ -34,24 +37,65 @@ function getThreadSearchMetadata(
 }
 
 export function ThreadProvider({ children }: { children: ReactNode }) {
+  const { tenantId, projectId } = useWorkspaceContext();
+  const autoTokenEnabled = process.env.NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN === "true";
+  const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
+  const envAssistantId: string | undefined = process.env.NEXT_PUBLIC_ASSISTANT_ID;
+
   const [apiUrl] = useQueryState("apiUrl");
   const [assistantId] = useQueryState("assistantId");
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
-    if (!apiUrl || !assistantId) return [];
-    const client = createClient(apiUrl, getApiKey() ?? undefined);
+    const finalApiUrl = apiUrl || envApiUrl;
+    const finalAssistantId = assistantId || envAssistantId;
+    if (!finalApiUrl || !finalAssistantId) return [];
 
-    const threads = await client.threads.search({
-      metadata: {
-        ...getThreadSearchMetadata(assistantId),
-      },
-      limit: 100,
+    const rawApiKey = getApiKey();
+    const clientApiKey =
+      rawApiKey && (!autoTokenEnabled || isJwtToken(rawApiKey))
+        ? rawApiKey
+        : undefined;
+
+    const client = createClient(finalApiUrl, clientApiKey, {
+      ...(tenantId ? { "x-tenant-id": tenantId } : {}),
+      ...(projectId ? { "x-project-id": projectId } : {}),
     });
 
-    return threads;
-  }, [apiUrl, assistantId]);
+    try {
+      const threads = await client.threads.search({
+        metadata: {
+          ...getThreadSearchMetadata(finalAssistantId),
+        },
+        limit: 100,
+      });
+
+      logClient({
+        level: "debug",
+        event: "thread_list_loaded",
+        message: "Loaded threads list",
+        context: {
+          assistantId: finalAssistantId,
+          count: threads.length,
+        },
+      });
+
+      return threads;
+    } catch (error) {
+      logClient({
+        level: "error",
+        event: "thread_list_load_error",
+        message: "Failed to load threads list",
+        context: {
+          assistantId: finalAssistantId,
+          apiUrl: finalApiUrl,
+          error: String(error),
+        },
+      });
+      throw error;
+    }
+  }, [apiUrl, assistantId, envApiUrl, envAssistantId, tenantId, projectId, autoTokenEnabled]);
 
   const value = {
     getThreads,

@@ -3,10 +3,14 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime
+from io import StringIO
+import csv
+import logging
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
+from fastapi.responses import StreamingResponse
 
 from app.auth.openfga import fga_agent, fga_project, fga_tenant, fga_user
 from app.db.access import (
@@ -15,6 +19,7 @@ from app.db.access import (
     create_or_update_runtime_binding,
     create_project,
     create_tenant,
+    aggregate_audit_logs,
     delete_agent,
     delete_membership,
     delete_project,
@@ -37,6 +42,7 @@ from app.db.session import session_scope
 
 
 router = APIRouter(prefix="/_platform", tags=["platform"])
+logger = logging.getLogger("proxy.platform")
 
 
 class CreateTenantRequest(BaseModel):
@@ -137,6 +143,16 @@ class AuditLogListResponse(BaseModel):
     items: list[AuditLogResponse]
 
 
+class AuditStatItem(BaseModel):
+    key: str
+    count: int
+
+
+class AuditStatsResponse(BaseModel):
+    by: str
+    items: list[AuditStatItem]
+
+
 def _slugify(name: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", name.strip().lower()).strip("-")
     slug = re.sub(r"-+", "-", slug)
@@ -146,6 +162,11 @@ def _slugify(name: str) -> str:
 def _db_session_factory(request: Request):
     session_factory = getattr(request.app.state, "db_session_factory", None)
     if session_factory is None:
+        logger.error(
+            "platform_db_unavailable request_id=%s path=%s",
+            getattr(request.state, "request_id", "-"),
+            request.url.path,
+        )
         raise HTTPException(status_code=503, detail="Database is not enabled")
     return session_factory
 
@@ -154,6 +175,11 @@ def _current_user_id(request: Request) -> uuid.UUID:
     user_id = getattr(request.state, "user_id", None)
     parsed = parse_uuid(str(user_id) if user_id else "")
     if parsed is None:
+        logger.warning(
+            "platform_user_missing request_id=%s path=%s",
+            getattr(request.state, "request_id", "-"),
+            request.url.path,
+        )
         raise HTTPException(status_code=401, detail="Authenticated user is required")
     return parsed
 
@@ -166,6 +192,13 @@ async def _sync_tenant_membership_fga(request: Request, tenant_id: str, user_sub
     client = _openfga_client(request)
     if client is None:
         return
+    logger.debug(
+        "platform_fga_sync_membership request_id=%s tenant_id=%s user_subject=%s role=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_id,
+        user_subject,
+        role,
+    )
 
     user = fga_user(user_subject)
     tenant = fga_tenant(tenant_id)
@@ -183,6 +216,12 @@ async def _remove_tenant_membership_fga(request: Request, tenant_id: str, user_s
     client = _openfga_client(request)
     if client is None:
         return
+    logger.debug(
+        "platform_fga_remove_membership request_id=%s tenant_id=%s user_subject=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_id,
+        user_subject,
+    )
     user = fga_user(user_subject)
     tenant = fga_tenant(tenant_id)
     await client.delete_tuples(
@@ -198,6 +237,12 @@ async def _remove_project_fga(request: Request, project_id: str, tenant_id: str)
     client = _openfga_client(request)
     if client is None:
         return
+    logger.debug(
+        "platform_fga_remove_project request_id=%s project_id=%s tenant_id=%s",
+        getattr(request.state, "request_id", "-"),
+        project_id,
+        tenant_id,
+    )
     await client.delete_tuple(
         user=fga_tenant(tenant_id),
         relation="tenant",
@@ -209,6 +254,12 @@ async def _remove_agent_fga(request: Request, agent_id: str, project_id: str) ->
     client = _openfga_client(request)
     if client is None:
         return
+    logger.debug(
+        "platform_fga_remove_agent request_id=%s agent_id=%s project_id=%s",
+        getattr(request.state, "request_id", "-"),
+        agent_id,
+        project_id,
+    )
     await client.delete_tuple(
         user=fga_project(project_id),
         relation="project",
@@ -219,6 +270,7 @@ async def _remove_agent_fga(request: Request, agent_id: str, project_id: str) ->
 def _resolve_tenant_or_404(session, tenant_ref: str):
     tenant = resolve_tenant(session, tenant_ref)
     if tenant is None:
+        logger.warning("platform_tenant_not_found tenant_ref=%s", tenant_ref)
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
 
@@ -226,6 +278,11 @@ def _resolve_tenant_or_404(session, tenant_ref: str):
 def _require_tenant_membership(session, tenant_id: uuid.UUID, acting_user_id: uuid.UUID):
     membership = get_membership(session, tenant_id=tenant_id, user_id=acting_user_id)
     if membership is None:
+        logger.warning(
+            "platform_membership_required tenant_id=%s user_id=%s",
+            tenant_id,
+            acting_user_id,
+        )
         raise HTTPException(status_code=403, detail="Tenant membership required")
     return membership
 
@@ -233,6 +290,12 @@ def _require_tenant_membership(session, tenant_id: uuid.UUID, acting_user_id: uu
 def _require_tenant_admin(session, tenant_id: uuid.UUID, acting_user_id: uuid.UUID):
     membership = _require_tenant_membership(session, tenant_id, acting_user_id)
     if membership.role not in {"owner", "admin"}:
+        logger.warning(
+            "platform_admin_required tenant_id=%s user_id=%s role=%s",
+            tenant_id,
+            acting_user_id,
+            membership.role,
+        )
         raise HTTPException(status_code=403, detail="Only owner/admin can perform this action")
     return membership
 
@@ -246,6 +309,14 @@ async def list_my_tenants(
     sort_by: str = Query(default="created_at", pattern="^(created_at|name)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ):
+    logger.info(
+        "platform_list_tenants request_id=%s limit=%s offset=%s sort_by=%s sort_order=%s",
+        getattr(request.state, "request_id", "-"),
+        limit,
+        offset,
+        sort_by,
+        sort_order,
+    )
     user_id = _current_user_id(request)
     session_factory = _db_session_factory(request)
 
@@ -272,6 +343,12 @@ async def list_my_tenants(
 
 @router.post("/tenants", response_model=TenantResponse)
 async def create_tenant_endpoint(request: Request, payload: CreateTenantRequest):
+    logger.info(
+        "platform_create_tenant request_id=%s name=%s slug=%s",
+        getattr(request.state, "request_id", "-"),
+        payload.name,
+        payload.slug,
+    )
     user_id = _current_user_id(request)
     session_factory = _db_session_factory(request)
     slug = payload.slug or _slugify(payload.name)
@@ -286,6 +363,12 @@ async def create_tenant_endpoint(request: Request, payload: CreateTenantRequest)
                 role="owner",
             )
         except IntegrityError as exc:
+            logger.warning(
+                "platform_create_tenant_conflict request_id=%s slug=%s error=%s",
+                getattr(request.state, "request_id", "-"),
+                slug,
+                exc,
+            )
             raise HTTPException(status_code=409, detail=f"Tenant slug already exists: {slug}") from exc
 
         if getattr(request.state, "user_subject", None):
@@ -306,6 +389,14 @@ async def create_tenant_endpoint(request: Request, payload: CreateTenantRequest)
 
 @router.post("/tenants/{tenant_ref}/memberships", response_model=MembershipResponse)
 async def add_membership(request: Request, tenant_ref: str, payload: AddMembershipRequest):
+    logger.info(
+        "platform_add_membership request_id=%s tenant_ref=%s role=%s user_id=%s external_subject=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_ref,
+        payload.role,
+        payload.user_id,
+        payload.external_subject,
+    )
     acting_user_id = _current_user_id(request)
     session_factory = _db_session_factory(request)
 
@@ -357,6 +448,12 @@ async def add_membership(request: Request, tenant_ref: str, payload: AddMembersh
 
 @router.delete("/tenants/{tenant_ref}/memberships/{user_ref}", response_model=DeleteMembershipResponse)
 async def remove_membership(request: Request, tenant_ref: str, user_ref: str):
+    logger.info(
+        "platform_remove_membership request_id=%s tenant_ref=%s user_ref=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_ref,
+        user_ref,
+    )
     acting_user_id = _current_user_id(request)
     session_factory = _db_session_factory(request)
 
@@ -404,6 +501,13 @@ async def list_projects(
     sort_by: str = Query(default="created_at", pattern="^(created_at|name)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ):
+    logger.info(
+        "platform_list_projects request_id=%s tenant_ref=%s limit=%s offset=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_ref,
+        limit,
+        offset,
+    )
     acting_user_id = _current_user_id(request)
     session_factory = _db_session_factory(request)
 
@@ -427,6 +531,12 @@ async def list_projects(
 
 @router.post("/projects", response_model=ProjectResponse)
 async def create_project_endpoint(request: Request, payload: CreateProjectRequest):
+    logger.info(
+        "platform_create_project request_id=%s tenant_id=%s name=%s",
+        getattr(request.state, "request_id", "-"),
+        payload.tenant_id,
+        payload.name,
+    )
     acting_user_id = _current_user_id(request)
     session_factory = _db_session_factory(request)
 
@@ -446,6 +556,11 @@ async def create_project_endpoint(request: Request, payload: CreateProjectReques
 
 @router.delete("/projects/{project_id}")
 async def delete_project_endpoint(request: Request, project_id: str):
+    logger.info(
+        "platform_delete_project request_id=%s project_id=%s",
+        getattr(request.state, "request_id", "-"),
+        project_id,
+    )
     acting_user_id = _current_user_id(request)
     project_uuid = parse_uuid(project_id)
     if project_uuid is None:
@@ -476,6 +591,13 @@ async def list_agents(
     sort_by: str = Query(default="created_at", pattern="^(created_at|name)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ):
+    logger.info(
+        "platform_list_agents request_id=%s project_id=%s limit=%s offset=%s",
+        getattr(request.state, "request_id", "-"),
+        project_id,
+        limit,
+        offset,
+    )
     acting_user_id = _current_user_id(request)
     project_uuid = parse_uuid(project_id)
     if project_uuid is None:
@@ -511,6 +633,13 @@ async def list_agents(
 
 @router.post("/agents", response_model=AgentResponse)
 async def create_agent_endpoint(request: Request, payload: CreateAgentRequest):
+    logger.info(
+        "platform_create_agent request_id=%s project_id=%s name=%s graph_id=%s",
+        getattr(request.state, "request_id", "-"),
+        payload.project_id,
+        payload.name,
+        payload.graph_id,
+    )
     acting_user_id = _current_user_id(request)
     project_uuid = parse_uuid(payload.project_id)
     if project_uuid is None:
@@ -549,6 +678,11 @@ async def create_agent_endpoint(request: Request, payload: CreateAgentRequest):
 
 @router.delete("/agents/{agent_id}")
 async def delete_agent_endpoint(request: Request, agent_id: str):
+    logger.info(
+        "platform_delete_agent request_id=%s agent_id=%s",
+        getattr(request.state, "request_id", "-"),
+        agent_id,
+    )
     acting_user_id = _current_user_id(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
@@ -578,6 +712,11 @@ async def list_agent_bindings(
     sort_by: str = Query(default="created_at", pattern="^(created_at|environment)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ):
+    logger.info(
+        "platform_list_bindings request_id=%s agent_id=%s",
+        getattr(request.state, "request_id", "-"),
+        agent_id,
+    )
     acting_user_id = _current_user_id(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
@@ -616,6 +755,13 @@ async def list_agent_bindings(
 
 @router.post("/agents/{agent_id}/bindings", response_model=RuntimeBindingResponse)
 async def upsert_agent_binding(request: Request, agent_id: str, payload: UpsertRuntimeBindingRequest):
+    logger.info(
+        "platform_upsert_binding request_id=%s agent_id=%s env=%s graph_id=%s",
+        getattr(request.state, "request_id", "-"),
+        agent_id,
+        payload.environment,
+        payload.langgraph_graph_id,
+    )
     acting_user_id = _current_user_id(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
@@ -662,6 +808,13 @@ async def query_tenant_audit_logs(
     from_time: datetime | None = None,
     to_time: datetime | None = None,
 ):
+    logger.info(
+        "platform_query_audit_logs request_id=%s tenant_ref=%s limit=%s offset=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_ref,
+        limit,
+        offset,
+    )
     acting_user_id = _current_user_id(request)
     filter_user_id = parse_uuid(user_id) if user_id else None
     if user_id and filter_user_id is None:
@@ -708,4 +861,130 @@ async def query_tenant_audit_logs(
                 )
                 for r in rows
             ],
+        )
+
+
+@router.get("/tenants/{tenant_ref}/audit-logs/stats", response_model=AuditStatsResponse)
+async def query_tenant_audit_stats(
+    request: Request,
+    tenant_ref: str,
+    by: str = Query(default="path", pattern="^(path|status_code|user_id|plane)$"),
+    limit: int = Query(default=20, ge=1, le=100),
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+):
+    logger.info(
+        "platform_query_audit_stats request_id=%s tenant_ref=%s by=%s limit=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_ref,
+        by,
+        limit,
+    )
+    acting_user_id = _current_user_id(request)
+    session_factory = _db_session_factory(request)
+
+    with session_scope(session_factory) as session:
+        tenant = _resolve_tenant_or_404(session, tenant_ref)
+        _require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        rows = aggregate_audit_logs(
+            session,
+            tenant_id=tenant.id,
+            by=by,
+            limit=limit,
+            from_time=from_time,
+            to_time=to_time,
+        )
+        return AuditStatsResponse(
+            by=by,
+            items=[AuditStatItem(key=k, count=c) for k, c in rows],
+        )
+
+
+@router.get("/tenants/{tenant_ref}/audit-logs/export")
+async def export_tenant_audit_logs(
+    request: Request,
+    tenant_ref: str,
+    plane: str | None = Query(default=None, pattern="^(control_plane|runtime_proxy|internal)$"),
+    method: str | None = Query(default=None, pattern="^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$"),
+    path_prefix: str | None = None,
+    status_code: int | None = Query(default=None, ge=100, le=599),
+    user_id: str | None = None,
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+    max_rows: int = Query(default=5000, ge=1, le=20000),
+):
+    logger.info(
+        "platform_export_audit_logs request_id=%s tenant_ref=%s max_rows=%s",
+        getattr(request.state, "request_id", "-"),
+        tenant_ref,
+        max_rows,
+    )
+    acting_user_id = _current_user_id(request)
+    filter_user_id = parse_uuid(user_id) if user_id else None
+    if user_id and filter_user_id is None:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+
+    session_factory = _db_session_factory(request)
+    with session_scope(session_factory) as session:
+        tenant = _resolve_tenant_or_404(session, tenant_ref)
+        _require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+
+        rows, _ = list_audit_logs(
+            session,
+            tenant_id=tenant.id,
+            limit=max_rows,
+            offset=0,
+            plane=plane,
+            method=method,
+            path_prefix=path_prefix,
+            status_code=status_code,
+            user_id=filter_user_id,
+            from_time=from_time,
+            to_time=to_time,
+        )
+
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "id",
+                "created_at",
+                "request_id",
+                "plane",
+                "method",
+                "path",
+                "query",
+                "status_code",
+                "duration_ms",
+                "tenant_id",
+                "user_id",
+                "user_subject",
+                "client_ip",
+            ]
+        )
+        for row in rows:
+            writer.writerow(
+                [
+                    str(row.id),
+                    row.created_at.isoformat(),
+                    row.request_id,
+                    row.plane,
+                    row.method,
+                    row.path,
+                    row.query,
+                    row.status_code,
+                    row.duration_ms,
+                    str(row.tenant_id) if row.tenant_id else "",
+                    str(row.user_id) if row.user_id else "",
+                    row.user_subject or "",
+                    row.client_ip or "",
+                ]
+            )
+
+        csv_text = output.getvalue()
+        filename = f"audit_logs_{tenant.id}.csv"
+        return StreamingResponse(
+            iter([csv_text]),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
         )

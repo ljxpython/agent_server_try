@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -7,6 +9,9 @@ from app.auth.keycloak import KeycloakVerifier, extract_bearer_token, is_invalid
 from app.config import Settings
 from app.db.access import upsert_user_from_subject
 from app.db.session import session_scope
+
+
+logger = logging.getLogger("proxy.auth")
 
 
 def register_auth_context_middleware(
@@ -25,10 +30,28 @@ def register_auth_context_middleware(
             return await call_next(request)
 
         token = extract_bearer_token(request.headers.get("authorization"))
+        token_source = "authorization"
         if not token:
             token = request.headers.get("x-api-key")
+            token_source = "x-api-key"
+
+        logger.debug(
+            "auth_check_started request_id=%s path=%s method=%s token_source=%s has_token=%s",
+            getattr(request.state, "request_id", "-"),
+            request.url.path,
+            request.method,
+            token_source,
+            bool(token),
+        )
+
         if not token:
             if settings.keycloak_auth_required:
+                logger.warning(
+                    "auth_missing_token request_id=%s path=%s method=%s",
+                    getattr(request.state, "request_id", "-"),
+                    request.url.path,
+                    request.method,
+                )
                 return JSONResponse(
                     status_code=401,
                     content={
@@ -45,6 +68,11 @@ def register_auth_context_middleware(
 
         verifier: KeycloakVerifier | None = getattr(request.app.state, "keycloak_verifier", None)
         if verifier is None:
+            logger.error(
+                "auth_verifier_missing request_id=%s path=%s",
+                getattr(request.state, "request_id", "-"),
+                request.url.path,
+            )
             return JSONResponse(
                 status_code=500,
                 content={
@@ -57,6 +85,14 @@ def register_auth_context_middleware(
             claims = verifier.verify_token(token)
         except Exception as exc:
             if is_invalid_token_error(exc):
+                logger.warning(
+                    "auth_invalid_token request_id=%s path=%s method=%s token_source=%s error=%s",
+                    getattr(request.state, "request_id", "-"),
+                    request.url.path,
+                    request.method,
+                    token_source,
+                    exc,
+                )
                 return JSONResponse(
                     status_code=401,
                     content={
@@ -69,6 +105,13 @@ def register_auth_context_middleware(
                         "Vary": "Origin",
                     },
                 )
+            logger.error(
+                "auth_provider_unavailable request_id=%s path=%s method=%s error=%s",
+                getattr(request.state, "request_id", "-"),
+                request.url.path,
+                request.method,
+                exc,
+            )
             return JSONResponse(
                 status_code=502,
                 content={
@@ -78,12 +121,24 @@ def register_auth_context_middleware(
             )
 
         subject = claims.get("sub")
+        logger.info(
+            "auth_verified request_id=%s path=%s subject=%s email=%s",
+            getattr(request.state, "request_id", "-"),
+            request.url.path,
+            subject,
+            claims.get("email"),
+        )
         request.state.auth_claims = claims
         request.state.user_subject = subject
 
         if settings.platform_db_enabled and subject:
             session_factory = getattr(request.app.state, "db_session_factory", None)
             if session_factory is None:
+                logger.error(
+                    "auth_db_misconfigured request_id=%s path=%s",
+                    getattr(request.state, "request_id", "-"),
+                    request.url.path,
+                )
                 return JSONResponse(
                     status_code=500,
                     content={
@@ -99,6 +154,12 @@ def register_auth_context_middleware(
                     email=claims.get("email"),
                 )
                 request.state.user_id = str(user.id)
+                logger.debug(
+                    "auth_user_upserted request_id=%s subject=%s user_id=%s",
+                    getattr(request.state, "request_id", "-"),
+                    subject,
+                    request.state.user_id,
+                )
 
         response = await call_next(request)
         if subject:

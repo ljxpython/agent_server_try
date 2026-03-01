@@ -2,14 +2,15 @@
 
 ## 当前焦点
 
-第三阶段：项目与智能体管理（进行中）
+前端平台化改造开发（Phase 1 进行中）
 
 ## 总体进度
 
 - 阶段1（透传基础）：100%
 - 阶段2（身份与租户）：100%
-- 阶段3（项目/智能体/审计/OpenFGA）：95%
-- 阶段4（高级治理与自动化测试）：20%
+- 阶段3（项目/智能体/审计/OpenFGA）：100%
+- 阶段4（高级治理与自动化测试）：55%
+- 阶段5（前端平台化改造）：45%
 
 ## 状态看板
 
@@ -50,10 +51,39 @@
 21. 新增透传 `x-agent-id` 资源映射校验与 agent 级 OpenFGA check。
 22. 新增端到端自动化冒烟脚本：`scripts/smoke_e2e.py`。
 23. 新增 GitHub Actions CI：`.github/workflows/smoke-e2e.yml`。
+24. 新增审计聚合统计 API：`GET /_platform/tenants/{tenant_ref}/audit-logs/stats`。
+25. 新增审计导出 API：`GET /_platform/tenants/{tenant_ref}/audit-logs/export`（CSV）。
+26. 新增 OpenFGA 模型版本管理流程：版本化模型目录与迁移脚本。
+
+## 前端平台化调研完成项（本轮）
+
+1. 完成 `agent-chat-ui` 现有架构盘点：`layout/page/providers(client,stream,thread)` 边界识别。
+2. 明确改造原则：保留聊天核心，平台能力外置到 app shell 与平台页面。
+3. 输出 IA 与页面蓝图：`chat/agents/runtime-bindings/audit/stats/export/settings`。
+4. 明确状态边界：`AppContext` 与 `ChatRuntimeState`、`DomainQueryState` 解耦。
+5. 明确 API 策略：前端统一走 Next Route Handlers（BFF-lite），统一错误与分页语义。
+6. 明确鉴权策略：Keycloak 登录 + OpenFGA 后端判定，前端仅做 UX 反馈。
+7. 产出实施文档：`docs/frontend-platform-plan.md`。
+
+## 前端平台化已落地项（Phase 1，本轮）
+
+1. 新增 `workspace` 路由壳：`/workspace/layout` + 顶部导航。
+2. 旧入口 `src/app/page.tsx` 改为重定向到 `/workspace/chat`。
+3. 聊天页迁移到 `src/app/workspace/chat/page.tsx`，保留原 `ThreadProvider/StreamProvider/ArtifactProvider` 调用链。
+4. 新增租户/项目上下文 Provider：`src/providers/WorkspaceContext.tsx`（query 参数持久化）。
+5. 新增范围切换组件：`src/components/platform/scope-switcher.tsx`。
+6. 新增最小平台 API 封装：`src/lib/platform-api/{client,tenants,projects,types}.ts`。
+7. 新增占位页面：`workspace/agents`、`workspace/runtime-bindings`、`workspace/audit`、`workspace/stats`。
+8. 构建验证通过：`pnpm build`（仅存在既有 lint warnings，无新增阻断错误）。
+9. 新增前后端日志落盘系统：`logs/backend.log`、`logs/frontend-server.log`、`logs/frontend-client.log`。
+10. 新增日志文档：`docs/logging-system.md`。
+11. 已将运行时透传实现从 `main.py` 抽离到 `app/api/proxy/runtime_passthrough.py`（入口路由保持不变）。
+12. 已完成运行时上下文头透传：`StreamProvider/ThreadProvider` 自动注入 `x-tenant-id` / `x-project-id`。
 
 ## 下一步
 
-1. 增加审计查询 API 的聚合统计（按路径/状态码/用户）。
-2. 增加平台 API 的审计导出能力。
-3. 增加 OpenFGA 模型版本管理与迁移流程。
-4. 增加 CI 状态徽章与失败诊断指引。
+1. 完成平台页最小读能力：agents/runtime-bindings/audit/stats 的列表查询。
+2. 增加前端回归检查：聊天主路径、切换上下文重置、403 提示一致性。
+3. 把前端 token 获取从“固定用户名密码换 token”升级为标准 Keycloak 浏览器登录流（OIDC Code + PKCE，后续做）。
+4. 补齐后端遗留：CI 徽章与失败诊断、跨环境模板、RBAC 与 OpenFGA 回滚脚本。
+5. 下一阶段再实现 `app/services/` 分层，把控制平面业务规则从 API 层逐步下沉。

@@ -39,6 +39,7 @@ OPENFGA_AUTO_BOOTSTRAP=false
 OPENFGA_URL=http://127.0.0.1:18081
 OPENFGA_STORE_ID=<store-id>
 OPENFGA_MODEL_ID=<model-id>
+OPENFGA_MODEL_FILE=config/openfga-models/v1.json
 ```
 
 ## 已接入逻辑
@@ -57,3 +58,30 @@ OPENFGA_MODEL_ID=<model-id>
 1. 使用 owner 用户创建 tenant/project/agent。
 2. 使用 member 用户调用读接口应通过。
 3. member 写透传请求在策略开启时应被 `403` 拦截。
+
+## 模型版本管理与迁移
+
+模型文件目录：`config/openfga-models/`
+
+当前默认版本：`config/openfga-models/v1.json`
+
+当需要升级模型：
+
+1. 新增版本文件（例如 `config/openfga-models/v2.json`）
+2. 执行迁移脚本写入新模型：
+
+```bash
+PYTHONPATH=. OPENFGA_URL=http://127.0.0.1:18081 \
+OPENFGA_STORE_ID=<store-id> \
+OPENFGA_MODEL_FILE=config/openfga-models/v2.json \
+uv run python scripts/openfga_model_migrate.py --apply
+```
+
+3. 把输出的 `OPENFGA_MODEL_ID` 与 `OPENFGA_MODEL_FILE` 更新到 `.env`
+4. 重启服务并运行 `scripts/smoke_e2e.py` 验证
+
+## 服务器迁移参考
+
+如果要把本地 OpenFGA/Keycloak/PG 一起迁移到服务器，请直接参考：
+
+- `docs/server-migration-guide.md`

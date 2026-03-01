@@ -68,6 +68,33 @@ To use these variables:
 
 When these environment variables are set, the application will use them instead of showing the setup form.
 
+### Optional: Auto-fetch Keycloak token (no manual API key input)
+
+For local development, you can let the frontend fetch a Keycloak token automatically via `/api/keycloak-token`:
+
+```bash
+NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN=true
+KEYCLOAK_TOKEN_PROXY_ENABLED=true
+KEYCLOAK_TOKEN_URL=http://127.0.0.1:18080/realms/agent-platform/protocol/openid-connect/token
+KEYCLOAK_CLIENT_ID=agent-proxy
+KEYCLOAK_TOKEN_USERNAME=demo_user
+KEYCLOAK_TOKEN_PASSWORD=Demo@123456
+```
+
+This avoids entering token/API key manually every time. The token is cached and refreshed before expiry.
+
+### Optional: Frontend logs to file
+
+The app can persist both server-side and browser-forwarded logs to files:
+
+```bash
+FRONTEND_LOGS_DIR=../logs
+FRONTEND_SERVER_LOG_FILE=frontend-server.log
+FRONTEND_CLIENT_LOG_FILE=frontend-client.log
+```
+
+Browser logs are forwarded to `POST /api/client-logs` and written to `FRONTEND_CLIENT_LOG_FILE`.
+
 ## Hiding Messages in the Chat
 
 You can control the visibility of messages within the Agent Chat UI in two main ways:

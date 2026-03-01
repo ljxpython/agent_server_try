@@ -20,6 +20,8 @@
 - `GET /_platform/agents/{agent_id}/bindings`：查询运行时绑定（有 membership 即可）
 - `POST /_platform/agents/{agent_id}/bindings`：创建/更新运行时绑定（仅 `owner/admin`）
 - `GET /_platform/tenants/{tenant_ref}/audit-logs`：查询租户审计日志（仅 `owner/admin`）
+- `GET /_platform/tenants/{tenant_ref}/audit-logs/stats`：审计聚合统计（仅 `owner/admin`）
+- `GET /_platform/tenants/{tenant_ref}/audit-logs/export`：导出审计日志 CSV（仅 `owner/admin`）
 
 ## 角色权限矩阵
 
@@ -119,6 +121,29 @@ curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs
 - `user_id=<uuid>`
 - `from_time=<ISO8601>`
 - `to_time=<ISO8601>`
+
+### 9) 查询审计聚合统计（owner/admin）
+
+```bash
+curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs/stats?by=path&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+支持维度：
+
+- `by=path`
+- `by=status_code`
+- `by=user_id`
+- `by=plane`
+
+### 10) 导出审计日志 CSV（owner/admin）
+
+```bash
+curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs/export?max_rows=5000" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+支持过滤参数与审计查询一致：`plane/method/path_prefix/status_code/user_id/from_time/to_time`。
 
 ## 与透传链路的关系
 

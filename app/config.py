@@ -29,6 +29,11 @@ class Settings:
     openfga_url: str
     openfga_store_id: str | None
     openfga_model_id: str | None
+    openfga_model_file: str
+    logs_dir: str
+    backend_log_file: str
+    backend_log_max_bytes: int
+    backend_log_backup_count: int
 
 
 def _as_bool(value: str, default: bool = False) -> bool:
@@ -62,4 +67,9 @@ def load_settings() -> Settings:
         openfga_url=os.getenv("OPENFGA_URL", "http://127.0.0.1:18081"),
         openfga_store_id=os.getenv("OPENFGA_STORE_ID") or None,
         openfga_model_id=os.getenv("OPENFGA_MODEL_ID") or None,
+        openfga_model_file=os.getenv("OPENFGA_MODEL_FILE", "config/openfga-models/v1.json"),
+        logs_dir=os.getenv("LOGS_DIR", "logs"),
+        backend_log_file=os.getenv("BACKEND_LOG_FILE", "backend.log"),
+        backend_log_max_bytes=max(1024 * 1024, int(os.getenv("BACKEND_LOG_MAX_BYTES", str(10 * 1024 * 1024)))),
+        backend_log_backup_count=max(1, int(os.getenv("BACKEND_LOG_BACKUP_COUNT", "5"))),
     )

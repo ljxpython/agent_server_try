@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import time
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 import jwt
 from jwt import InvalidTokenError, PyJWKClient
+
+
+logger = logging.getLogger("proxy.keycloak")
 
 
 @dataclass(frozen=True)
@@ -32,6 +36,12 @@ class KeycloakVerifier:
         self.jwks_url = jwks_url
         self._jwks_client = PyJWKClient(jwks_url)
         self._last_refresh = 0.0
+        logger.info(
+            "keycloak_verifier_initialized issuer=%s audience=%s jwks_url=%s",
+            settings.issuer,
+            settings.audience,
+            jwks_url,
+        )
 
     def _refresh_keyset_if_needed(self) -> None:
         now = time.time()
@@ -39,11 +49,13 @@ class KeycloakVerifier:
             return
         self._jwks_client = PyJWKClient(self.jwks_url)
         self._last_refresh = now
+        logger.debug("keycloak_jwks_refreshed jwks_url=%s", self.jwks_url)
 
     def verify_token(self, token: str) -> dict[str, Any]:
         self._refresh_keyset_if_needed()
 
         signing_key = self._jwks_client.get_signing_key_from_jwt(token)
+        logger.debug("keycloak_signing_key_resolved key_id=%s", signing_key.key_id)
         payload = jwt.decode(
             token,
             signing_key.key,
@@ -60,6 +72,7 @@ class KeycloakVerifier:
                 "require": ["exp", "iat", "sub"],
             },
         )
+        logger.debug("keycloak_token_verified subject=%s", payload.get("sub"))
         return payload
 
 

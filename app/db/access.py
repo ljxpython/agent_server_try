@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import and_, asc, desc, func, select
+from sqlalchemy import String, and_, asc, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Agent, AuditLog, Membership, Project, RuntimeBinding, Tenant, User
@@ -357,3 +357,42 @@ def list_audit_logs(
     rows = list(session.scalars(stmt).all())
     total = int(session.scalar(count_stmt) or 0)
     return rows, total
+
+
+def aggregate_audit_logs(
+    session: Session,
+    tenant_id: uuid.UUID,
+    by: str,
+    limit: int,
+    from_time: datetime | None = None,
+    to_time: datetime | None = None,
+) -> list[tuple[str, int]]:
+    filters = [AuditLog.tenant_id == tenant_id]
+    if from_time is not None:
+        filters.append(AuditLog.created_at >= from_time)
+    if to_time is not None:
+        filters.append(AuditLog.created_at <= to_time)
+
+    where_expr = and_(*filters)
+
+    if by == "path":
+        key_expr = AuditLog.path
+    elif by == "status_code":
+        key_expr = func.cast(AuditLog.status_code, String)
+    elif by == "user_id":
+        key_expr = func.coalesce(func.cast(AuditLog.user_id, String), "anonymous")
+    elif by == "plane":
+        key_expr = AuditLog.plane
+    else:
+        key_expr = AuditLog.path
+
+    stmt = (
+        select(key_expr.label("k"), func.count().label("c"))
+        .where(where_expr)
+        .group_by(key_expr)
+        .order_by(func.count().desc())
+        .limit(limit)
+    )
+
+    rows = session.execute(stmt).all()
+    return [(str(k), int(c)) for k, c in rows]
