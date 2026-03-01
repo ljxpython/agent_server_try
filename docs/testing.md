@@ -1,5 +1,7 @@
 # 测试与冒烟验证
 
+[![smoke-e2e](https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml/badge.svg)](https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml)
+
 ## 端到端 Smoke
 
 脚本：`scripts/smoke_e2e.py`
@@ -49,3 +51,7 @@ CI 会自动完成：
 2. 启动 Keycloak 并创建 realm/client/test users
 3. 启动 OpenFGA 并初始化 store/model
 4. 执行 `scripts/smoke_e2e.py`
+
+## CI 失败诊断
+
+详见：`docs/ci-troubleshooting.md`
