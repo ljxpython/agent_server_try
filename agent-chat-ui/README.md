@@ -38,6 +38,15 @@ pnpm dev
 
 The app will be available at `http://localhost:3000`.
 
+If you hit intermittent Next.js chunk errors (for example `Cannot find module './1331.js'`), clear build artifacts and restart:
+
+```bash
+pnpm clean
+pnpm dev
+```
+
+When running Playwright and a manual dev server at the same time, keep separate build output directories. This repo already sets Playwright `NEXT_DIST_DIR=.next-e2e` to avoid `.next` conflicts.
+
 ## Usage
 
 Once the app is running (or if using the deployed site), you'll be prompted to enter:
