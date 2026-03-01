@@ -92,12 +92,18 @@ src/lib/platform-api/
 - 新增 Agent 列表/创建/编辑页。
 - 新增 Runtime Binding 列表与环境切换。
 - 与后端 `/_platform/*` 保持 1:1 对齐。
+- 已完成最小读能力：`agents/runtime-bindings` 页面可基于当前 `tenant/project` 直接读取列表数据。
+- 已补充分页交互（Prev/Next）与基础错误态（含 403 友好提示）。
+- 已补充排序与页大小切换（agents/runtime-bindings）。
 
 ### Phase 3：审计、统计、导出与项目设置
 
 - 新增审计日志查询、聚合统计页面。
 - 新增 CSV 导出入口与下载反馈。
 - 补齐项目设置页（只放已实现后端能力）。
+- 已完成最小读能力：`audit/stats` 页面可读取租户审计列表与聚合统计。
+- 已补充审计筛选（plane/method/path_prefix/status）与 CSV 导出入口。
+- 已补充审计时间范围过滤（from_time/to_time）与页大小切换。
 
 ## 可借鉴开源项目（优先借鉴模式，不硬搬代码）
 
@@ -133,3 +139,13 @@ src/lib/platform-api/
 - 切换租户/项目后无跨项目 thread 污染。
 - 平台页面统一错误与分页行为。
 - 403 场景前后端行为一致（前端提示 + 后端拒绝）。
+
+## 回归检查（已落地）
+
+- 新增 Playwright 回归用例：`agent-chat-ui/tests/platform-regression.spec.ts`。
+- 覆盖项：
+  - 平台壳与 chat 主路径可访问。
+  - agents/runtime-bindings 页面基础数据加载。
+  - 403 权限错误文案一致性。
+- 当前回归结果：`4 passed`。
+- 运行方式：`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`。

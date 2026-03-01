@@ -62,6 +62,10 @@
 - 新增平台页面：`agents/runtime-bindings/audit/stats/export/settings`。
 - 统一平台 API 封装层（BFF-lite 转发 + 错误/分页规范）。
 - 已完成第一条关键链路：运行时请求自动注入 `x-tenant-id` / `x-project-id`。
+- 已完成第二条关键链路：`agents/runtime-bindings/audit/stats` 页面最小读能力打通。
+- 已完成第三条关键链路：平台页基础交互（分页/筛选/导出入口）与 403 友好提示。
+- 已完成前端回归自动化：Playwright 用例覆盖平台壳、核心列表页与 403 提示一致性。
+- 已完成第四条关键链路：排序、页大小切换、审计时间范围过滤。
 - 详见：`docs/frontend-platform-plan.md`。
 
 ## PostgreSQL 核心表（初版）
@@ -77,3 +81,54 @@
 ## 当前里程碑结论
 
 第二至第四阶段核心后端能力已完成并可用，已进入前端平台化改造阶段。
+
+## 当前代码落地进度（以代码为准）
+
+- 前端完成度：约 `86%`
+  - 已完成：平台壳、上下文切换、运行时头透传、agents/runtime-bindings/audit/stats 读能力、分页/筛选/导出入口、403 友好提示、Playwright 回归用例。
+  - 未完成：标准 OIDC 浏览器登录流（Code + PKCE）、部分平台页高级交互（如更完整筛选与操作流程）、settings/export 完整化。
+- 后端完成度：约 `90%`
+  - 已完成：透传、Keycloak、租户/项目/智能体、OpenFGA、审计、日志、CI 冒烟。
+  - 未完成：交付与运营收尾（CI 徽章与失败诊断、跨环境模板、RBAC/OpenFGA 回滚脚本）、`app/services` 分层下沉。
+
+## 接下来分步执行（一次只做一步）
+
+### Step 1（下一步立即执行）
+
+标准 Keycloak 浏览器登录流（OIDC Code + PKCE）
+
+- 目标：移除前端固定用户名/密码换 token 方案。
+- 完成标准：
+  - 前端登录跳转 Keycloak 成功。
+  - 回调换 token 成功并可访问平台/API。
+  - 旧自动 token 方案仅保留开发兼容开关。
+
+### Step 2
+
+后端交付与运维收尾
+
+- 目标：补齐生产可运维基础。
+- 完成标准：
+  - CI 徽章与失败诊断文档可直接使用。
+  - dev/staging/prod 配置模板齐全。
+  - RBAC 与 OpenFGA 回滚脚本可执行并有文档。
+
+### Step 3
+
+控制平面分层重构（`app/services`）
+
+- 目标：把业务规则从 `app/api/platform.py` 下沉到 service 层。
+- 完成标准：
+  - API 层仅保留参数/权限边界。
+  - service 层承载核心业务流程。
+  - 回归测试通过，接口行为不变。
+
+### Step 4
+
+前端平台页能力补齐（写操作与完整流程）
+
+- 目标：补齐 agents/runtime-bindings/audit 的完整操作闭环。
+- 完成标准：
+  - 创建/更新/删除路径可用。
+  - 错误态、权限态、空态一致。
+  - Playwright 用例覆盖关键写流程。

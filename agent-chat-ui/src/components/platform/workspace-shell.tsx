@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { AuthControls } from "./auth-controls";
 import { ScopeSwitcher } from "./scope-switcher";
 
 const NAV_ITEMS = [
@@ -26,7 +27,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               <h1 className="text-lg font-semibold">Agent Platform</h1>
               <p className="text-muted-foreground text-xs">Workspace scope: tenant -&gt; project</p>
             </div>
-            <ScopeSwitcher />
+            <div className="flex items-center gap-3">
+              <ScopeSwitcher />
+              <AuthControls />
+            </div>
           </div>
 
           <nav className="flex flex-wrap items-center gap-2">

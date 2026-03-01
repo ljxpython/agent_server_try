@@ -2,7 +2,7 @@
 
 ## 当前焦点
 
-前端平台化改造开发（Phase 1 进行中）
+前端平台化改造开发（Phase 3 已完成）
 
 ## 总体进度
 
@@ -10,7 +10,7 @@
 - 阶段2（身份与租户）：100%
 - 阶段3（项目/智能体/审计/OpenFGA）：100%
 - 阶段4（高级治理与自动化测试）：55%
-- 阶段5（前端平台化改造）：45%
+- 阶段5（前端平台化改造）：86%
 
 ## 状态看板
 
@@ -79,11 +79,22 @@
 10. 新增日志文档：`docs/logging-system.md`。
 11. 已将运行时透传实现从 `main.py` 抽离到 `app/api/proxy/runtime_passthrough.py`（入口路由保持不变）。
 12. 已完成运行时上下文头透传：`StreamProvider/ThreadProvider` 自动注入 `x-tenant-id` / `x-project-id`。
+13. 已完成平台页最小读能力：`agents/runtime-bindings/audit/stats` 页面接入真实列表查询。
+14. `platform-api` 已补齐模块：`agents/runtime-bindings/audit/stats`。
+15. 已完成平台页基础交互：分页（agents/runtime-bindings/audit）、筛选（audit）、导出入口（audit CSV）。
+16. 已完成平台页错误态统一：新增 `platform-api/errors.ts`，403 提示一致。
+17. 已新增 Playwright 回归用例：`tests/platform-regression.spec.ts`（4 条通过）。
+18. 已完成平台页排序与页大小切换：`agents/runtime-bindings`。
+19. 已完成审计时间范围过滤：`from_time/to_time`。
 
 ## 下一步
 
-1. 完成平台页最小读能力：agents/runtime-bindings/audit/stats 的列表查询。
-2. 增加前端回归检查：聊天主路径、切换上下文重置、403 提示一致性。
-3. 把前端 token 获取从“固定用户名密码换 token”升级为标准 Keycloak 浏览器登录流（OIDC Code + PKCE，后续做）。
-4. 补齐后端遗留：CI 徽章与失败诊断、跨环境模板、RBAC 与 OpenFGA 回滚脚本。
-5. 下一阶段再实现 `app/services/` 分层，把控制平面业务规则从 API 层逐步下沉。
+1. Step 1：把前端 token 获取从“固定用户名密码换 token”升级为标准 Keycloak 浏览器登录流（OIDC Code + PKCE）。
+2. Step 2：补齐后端遗留：CI 徽章与失败诊断、跨环境模板、RBAC 与 OpenFGA 回滚脚本。
+3. Step 3：实现 `app/services/` 分层，把控制平面业务规则从 API 层逐步下沉。
+4. Step 4：补齐前端平台页写操作闭环与回归用例。
+
+## 步骤执行规则
+
+- 每次只做一个 Step，完成后再进入下一个。
+- 每个 Step 完成必须满足：代码落地 + 构建/测试验证 + 文档更新。

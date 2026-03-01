@@ -385,3 +385,7 @@ src/deep_agent_demo/backends_demo/src
 
 # Next.js build cache
 .next/
+
+# Playwright artifacts (agent-chat-ui)
+agent-chat-ui/test-results/
+agent-chat-ui/playwright-report/
