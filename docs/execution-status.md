@@ -2,7 +2,7 @@
 
 ## 当前焦点
 
-前端平台化改造开发（Phase 3 已完成）
+前端平台化改造开发（Step 1 已完成，进入 Step 2）
 
 ## 总体进度
 
@@ -10,7 +10,7 @@
 - 阶段2（身份与租户）：100%
 - 阶段3（项目/智能体/审计/OpenFGA）：100%
 - 阶段4（高级治理与自动化测试）：55%
-- 阶段5（前端平台化改造）：86%
+- 阶段5（前端平台化改造）：92%
 
 ## 状态看板
 
@@ -86,13 +86,13 @@
 17. 已新增 Playwright 回归用例：`tests/platform-regression.spec.ts`（4 条通过）。
 18. 已完成平台页排序与页大小切换：`agents/runtime-bindings`。
 19. 已完成审计时间范围过滤：`from_time/to_time`。
+20. 已完成 Step 1：前端标准 OIDC 登录流（Code + PKCE）与回调换 token。
 
 ## 下一步
 
-1. Step 1：把前端 token 获取从“固定用户名密码换 token”升级为标准 Keycloak 浏览器登录流（OIDC Code + PKCE）。
-2. Step 2：补齐后端遗留：CI 徽章与失败诊断、跨环境模板、RBAC 与 OpenFGA 回滚脚本。
-3. Step 3：实现 `app/services/` 分层，把控制平面业务规则从 API 层逐步下沉。
-4. Step 4：补齐前端平台页写操作闭环与回归用例。
+1. Step 2：补齐后端遗留：CI 徽章与失败诊断、跨环境模板、RBAC 与 OpenFGA 回滚脚本。
+2. Step 3：实现 `app/services/` 分层，把控制平面业务规则从 API 层逐步下沉。
+3. Step 4：补齐前端平台页写操作闭环与回归用例。
 
 ## 步骤执行规则
 

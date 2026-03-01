@@ -1,12 +1,12 @@
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 
 import { consumePkceSession } from "@/lib/oidc-client";
 import { setOidcTokenSet } from "@/lib/oidc-storage";
 
-export default function OidcCallbackPage() {
+function OidcCallbackContent() {
   const router = useRouter();
   const params = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -90,5 +90,20 @@ export default function OidcCallbackPage() {
       <h1 className="text-xl font-semibold">Completing sign in...</h1>
       {error ? <p className="text-sm text-red-600">{error}</p> : <p className="text-muted-foreground text-sm">Please wait.</p>}
     </section>
+  );
+}
+
+export default function OidcCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <section className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center gap-3 p-6 text-center">
+          <h1 className="text-xl font-semibold">Completing sign in...</h1>
+          <p className="text-muted-foreground text-sm">Please wait.</p>
+        </section>
+      }
+    >
+      <OidcCallbackContent />
+    </Suspense>
   );
 }

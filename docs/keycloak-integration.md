@@ -199,6 +199,43 @@ curl -i -H "Authorization: Bearer $TOKEN" http://127.0.0.1:2024/info
 
 本章节用于记录决策，避免后续重复讨论。
 
+## 前端标准登录流（OIDC Code + PKCE，已落地）
+
+已新增前端浏览器登录流，不再依赖固定用户名/密码换 token：
+
+- 登录页：`/auth/login`
+- 回调页：`/auth/callback`
+- code->token 交换接口：`/api/auth/oidc/token`
+
+### 前端环境变量
+
+在 `agent-chat-ui/.env` 配置：
+
+```env
+NEXT_PUBLIC_OIDC_ENABLED=true
+NEXT_PUBLIC_KEYCLOAK_ISSUER=http://127.0.0.1:18080/realms/agent-platform
+NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=agent-proxy
+
+# 服务端 token 交换使用（route handler）
+KEYCLOAK_CLIENT_ID=agent-proxy
+KEYCLOAK_ISSUER=http://127.0.0.1:18080/realms/agent-platform
+```
+
+### Keycloak Client 必需设置
+
+- `Client authentication = Off`（public client）
+- `Standard flow = On`
+- `Valid redirect URIs` 包含：`http://127.0.0.1:3000/auth/callback`
+- `Web origins` 包含：`http://127.0.0.1:3000`
+
+### 使用方式
+
+1. 打开 `http://127.0.0.1:3000/auth/login`
+2. 点击 `Continue with Keycloak`
+3. 登录后回到 `workspace`，token 自动写入浏览器存储并用于 API 调用
+
+> 兼容说明：原 `/api/keycloak-token` 自动模式仍可保留作本地兜底，但推荐默认使用 OIDC 浏览器登录流。
+
 ## 重要：两条“必须重做”
 
 1. 你修改了 Keycloak 的 Audience Mapper 后，**必须重新获取一枚新 token**（旧 token 不会自动更新 `aud`）。

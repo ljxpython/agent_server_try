@@ -149,3 +149,12 @@ src/lib/platform-api/
   - 403 权限错误文案一致性。
 - 当前回归结果：`4 passed`。
 - 运行方式：`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`。
+
+## 认证进展（Step 1 已完成）
+
+- 已落地标准 Keycloak 浏览器登录流（OIDC Authorization Code + PKCE）。
+- 新增页面与接口：
+  - `auth/login`
+  - `auth/callback`
+  - `/api/auth/oidc/token`
+- 已新增 workspace 登录/登出入口（OIDC 开关启用时可见）。
