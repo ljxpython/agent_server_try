@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AuthControls } from "./auth-controls";
@@ -17,6 +17,8 @@ const NAV_ITEMS = [
 
 export function WorkspaceShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const query = searchParams.toString();
 
   return (
     <div className="bg-background text-foreground min-h-screen">
@@ -39,7 +41,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
               return (
                 <Link
                   key={item.href}
-                  href={item.href}
+                  href={query ? `${item.href}?${query}` : item.href}
                   className={[
                     "rounded-md border px-3 py-1 text-sm transition-colors",
                     active ? "bg-foreground text-background" : "hover:bg-muted",

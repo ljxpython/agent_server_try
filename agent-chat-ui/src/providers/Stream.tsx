@@ -276,6 +276,13 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   }, [assistantId, envAssistantId, setAssistantId]);
 
   useEffect(() => {
+    if (!apiUrl) {
+      return;
+    }
+    window.localStorage.setItem("lg:chat:apiUrl", apiUrl);
+  }, [apiUrl]);
+
+  useEffect(() => {
     if (!autoTokenEnabled) {
       return;
     }
