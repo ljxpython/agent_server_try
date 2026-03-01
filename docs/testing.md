@@ -2,6 +2,8 @@
 
 [![smoke-e2e](https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml/badge.svg)](https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml)
 
+工作流状态页：`https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml`
+
 ## 端到端 Smoke
 
 脚本：`scripts/smoke_e2e.py`
@@ -55,3 +57,11 @@ CI 会自动完成：
 ## CI 失败诊断
 
 详见：`docs/ci-troubleshooting.md`
+
+## 跨环境模板
+
+已提供模板：
+
+- `config/environments/.env.dev.example`
+- `config/environments/.env.staging.example`
+- `config/environments/.env.prod.example`

@@ -109,3 +109,23 @@ uv run alembic downgrade -1
 - 每天至少一次逻辑备份，保留最近 7 天。
 - 每次迁移前先执行一次手动备份。
 - 所有 schema 变更必须走迁移脚本，禁止手工直改生产库。
+
+## RBAC 回滚脚本（Step 2）
+
+当租户成员角色配置错误时，可用脚本直接回滚：
+
+```bash
+PLATFORM_DB_ENABLED=true \
+DATABASE_URL="postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform" \
+uv run python scripts/rbac_membership_rollback.py \
+  --tenant-ref <tenant-slug-or-id> \
+  --user-ref <user-id-or-external-subject> \
+  --target-role member \
+  --sync-openfga
+```
+
+参数说明：
+
+- `--target-role owner|admin|member|none`
+- `none` 表示删除 membership
+- `--sync-openfga` 会同步回滚 OpenFGA tenant 角色 tuple

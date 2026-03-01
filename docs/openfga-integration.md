@@ -80,6 +80,25 @@ uv run python scripts/openfga_model_migrate.py --apply
 3. 把输出的 `OPENFGA_MODEL_ID` 与 `OPENFGA_MODEL_FILE` 更新到 `.env`
 4. 重启服务并运行 `scripts/smoke_e2e.py` 验证
 
+## 模型回滚脚本（Step 2）
+
+当新模型上线后需要回滚到历史 `model_id`：
+
+```bash
+PYTHONPATH=. OPENFGA_URL=http://127.0.0.1:18081 \
+OPENFGA_STORE_ID=<store-id> \
+uv run python scripts/openfga_model_rollback.py \
+  --model-id <target_model_id> \
+  --env-file .env \
+  --apply
+```
+
+行为说明：
+
+- 先验证目标 `model_id` 在 OpenFGA store 中存在
+- 再把 `.env` 的 `OPENFGA_MODEL_ID` 更新为目标值
+- 回滚后重启服务并执行 `scripts/smoke_e2e.py`
+
 ## 服务器迁移参考
 
 如果要把本地 OpenFGA/Keycloak/PG 一起迁移到服务器，请直接参考：
