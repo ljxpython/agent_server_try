@@ -147,8 +147,15 @@ src/lib/platform-api/
   - 平台壳与 chat 主路径可访问。
   - agents/runtime-bindings 页面基础数据加载。
   - 403 权限错误文案一致性。
-- 当前回归结果：`4 passed`。
+- 当前回归结果：`8 passed`。
 - 运行方式：`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`。
+
+## Step 4 进展（已完成）
+
+- `agents` 页面已补齐写操作闭环：创建、更新、删除。
+- `runtime-bindings` 页面已补齐写操作闭环：upsert、删除，并支持从列表回填编辑。
+- 平台 API 客户端与封装已补齐写方法：`POST/DELETE/PATCH`。
+- 写流程回归覆盖已扩展并通过：create/update/delete/upsert。
 
 ## 认证进展（Step 1 已完成）
 

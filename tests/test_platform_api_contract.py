@@ -128,3 +128,42 @@ def test_create_agent_403_contract(monkeypatch):
 
     assert resp.status_code == 403
     assert resp.json()["detail"] == "Only owner/admin can perform this action"
+
+
+def test_update_agent_contract(monkeypatch):
+    async def fake_update_agent(*args, **kwargs):
+        return {
+            "id": "agent-1",
+            "project_id": "project-1",
+            "name": "Updated Agent",
+            "graph_id": "updated-graph",
+            "runtime_base_url": "http://runtime.updated",
+            "description": "updated",
+        }
+
+    monkeypatch.setattr("app.api.platform.update_agent_by_id", fake_update_agent)
+
+    payload = {
+        "name": "Updated Agent",
+        "graph_id": "updated-graph",
+        "runtime_base_url": "http://runtime.updated",
+        "description": "updated",
+    }
+    with _build_client() as client:
+        resp = client.patch("/_platform/agents/agent-1", json=payload)
+
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Updated Agent"
+
+
+def test_delete_runtime_binding_404_contract(monkeypatch):
+    async def fake_delete_binding(*args, **kwargs):
+        raise HTTPException(status_code=404, detail="Runtime binding not found")
+
+    monkeypatch.setattr("app.api.platform.delete_runtime_binding_by_id", fake_delete_binding)
+
+    with _build_client() as client:
+        resp = client.delete("/_platform/agents/agent-1/bindings/binding-1")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Runtime binding not found"

@@ -14,6 +14,7 @@ from app.services.platform_service import (
     create_tenant_for_current_user,
     delete_agent_by_id,
     delete_project_by_id,
+    delete_runtime_binding_by_id,
     export_tenant_audit_logs_csv,
     list_agent_bindings_by_agent_id,
     list_agents_for_project_id,
@@ -23,6 +24,7 @@ from app.services.platform_service import (
     query_tenant_audit_stats_data,
     remove_membership_from_tenant,
     upsert_agent_binding_by_agent_id,
+    update_agent_by_id,
 )
 
 
@@ -80,6 +82,13 @@ class CreateAgentRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
 
 
+class UpdateAgentRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=128)
+    graph_id: str = Field(min_length=2, max_length=128)
+    runtime_base_url: str = Field(min_length=10, max_length=512)
+    description: str = Field(default="", max_length=2000)
+
+
 class AgentResponse(BaseModel):
     id: str
     project_id: str
@@ -103,6 +112,11 @@ class RuntimeBindingResponse(BaseModel):
     langgraph_assistant_id: str
     langgraph_graph_id: str
     runtime_base_url: str
+
+
+class DeleteRuntimeBindingResponse(BaseModel):
+    deleted: bool
+    binding_id: str
 
 
 class AuditLogResponse(BaseModel):
@@ -301,6 +315,26 @@ async def delete_agent_endpoint(request: Request, agent_id: str):
     return await delete_agent_by_id(request, agent_id)
 
 
+@router.patch("/agents/{agent_id}", response_model=AgentResponse)
+async def update_agent_endpoint(request: Request, agent_id: str, payload: UpdateAgentRequest):
+    logger.info(
+        "platform_update_agent request_id=%s agent_id=%s name=%s graph_id=%s",
+        getattr(request.state, "request_id", "-"),
+        agent_id,
+        payload.name,
+        payload.graph_id,
+    )
+    row = await update_agent_by_id(
+        request,
+        agent_id=agent_id,
+        name=payload.name,
+        graph_id=payload.graph_id,
+        runtime_base_url=payload.runtime_base_url,
+        description=payload.description,
+    )
+    return AgentResponse(**row)
+
+
 @router.get("/agents/{agent_id}/bindings", response_model=list[RuntimeBindingResponse])
 async def list_agent_bindings(
     request: Request,
@@ -339,6 +373,18 @@ async def upsert_agent_binding(request: Request, agent_id: str, payload: UpsertR
         runtime_base_url=payload.runtime_base_url,
     )
     return RuntimeBindingResponse(**row)
+
+
+@router.delete("/agents/{agent_id}/bindings/{binding_id}", response_model=DeleteRuntimeBindingResponse)
+async def delete_runtime_binding_endpoint(request: Request, agent_id: str, binding_id: str):
+    logger.info(
+        "platform_delete_binding request_id=%s agent_id=%s binding_id=%s",
+        getattr(request.state, "request_id", "-"),
+        agent_id,
+        binding_id,
+    )
+    row = await delete_runtime_binding_by_id(request, agent_id=agent_id, binding_id=binding_id)
+    return DeleteRuntimeBindingResponse(**row)
 
 
 @router.get("/tenants/{tenant_ref}/audit-logs", response_model=AuditLogListResponse)

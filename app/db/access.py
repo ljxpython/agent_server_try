@@ -222,6 +222,22 @@ def create_agent(
     return agent
 
 
+def update_agent(
+    session: Session,
+    agent: Agent,
+    name: str,
+    graph_id: str,
+    runtime_base_url: str,
+    description: str,
+) -> Agent:
+    agent.name = name
+    agent.graph_id = graph_id
+    agent.runtime_base_url = runtime_base_url
+    agent.description = description
+    session.flush()
+    return agent
+
+
 def list_runtime_bindings(
     session: Session,
     agent_id: uuid.UUID,
@@ -270,6 +286,15 @@ def create_or_update_runtime_binding(
     binding.runtime_base_url = runtime_base_url
     session.flush()
     return binding
+
+
+def get_runtime_binding(session: Session, binding_id: uuid.UUID) -> RuntimeBinding | None:
+    return session.get(RuntimeBinding, binding_id)
+
+
+def delete_runtime_binding(session: Session, binding: RuntimeBinding) -> None:
+    session.delete(binding)
+    session.flush()
 
 
 def delete_membership(session: Session, membership: Membership) -> None:

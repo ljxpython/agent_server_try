@@ -152,3 +152,11 @@
   - 创建/更新/删除路径可用。
   - 错误态、权限态、空态一致。
   - Playwright 用例覆盖关键写流程。
+
+状态：已完成。
+
+本轮落地：
+- 后端新增写路径：`PATCH /_platform/agents/{agent_id}`、`DELETE /_platform/agents/{agent_id}/bindings/{binding_id}`。
+- 前端补齐写闭环：agents 支持 create/update/delete，runtime-bindings 支持 upsert/delete 与编辑回填。
+- 回归覆盖扩展到写流程：`agent-chat-ui/tests/platform-regression.spec.ts` 新增 create/update/delete/upsert 场景。
+- 验证结果：`PYTHONPATH=. uv run pytest -q`（8 passed）、`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）、`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`（8 passed）。

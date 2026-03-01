@@ -2,7 +2,7 @@
 
 ## 当前焦点
 
-前后端收尾开发（Step 3 已完成，准备进入 Step 4）
+前后端收尾开发（Step 4 已完成）
 
 ## 总体进度
 
@@ -10,7 +10,7 @@
 - 阶段2（身份与租户）：100%
 - 阶段3（项目/智能体/审计/OpenFGA）：100%
 - 阶段4（高级治理与自动化测试）：80%
-- 阶段5（前端平台化改造）：92%
+- 阶段5（前端平台化改造）：100%
 
 ## 状态看板
 
@@ -93,8 +93,20 @@
 
 ## 下一步
 
-1. Step 4：补齐前端平台页写操作闭环与回归用例。
-2. 扩展前后端 E2E 回归覆盖写路径与权限拒绝场景。
+1. 持续补充端到端回归覆盖（跨租户/跨项目切换下的写操作与权限拒绝）。
+2. 进入后续体验优化与运维治理增量迭代。
+
+## Step 4 本轮完成项
+
+1. 后端新增 agent 更新接口：`PATCH /_platform/agents/{agent_id}`。
+2. 后端新增 runtime binding 删除接口：`DELETE /_platform/agents/{agent_id}/bindings/{binding_id}`。
+3. 前端 `agents` 页面已支持 create/update/delete 全流程。
+4. 前端 `runtime-bindings` 页面已支持 upsert/delete 与编辑回填。
+5. 前端平台 API 客户端新增 `PATCH` 能力，并补齐写操作封装。
+6. 后端契约测试新增更新/删除路径断言，`PYTHONPATH=. uv run pytest -q` 结果 `8 passed`。
+7. 后端冒烟验证通过：`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）。
+8. 前端构建验证通过：`cd agent-chat-ui && pnpm build`。
+9. 前端 Playwright 回归扩展并通过：`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`（8 passed）。
 
 ## Step 3 本轮完成项
 

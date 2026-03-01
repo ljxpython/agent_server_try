@@ -12,6 +12,7 @@ from app.db.access import (
     get_project,
     list_agents_for_project,
     parse_uuid,
+    update_agent,
 )
 from app.db.session import session_scope
 from app.services.platform_common import (
@@ -129,3 +130,43 @@ async def delete_agent_by_id(request: Request, agent_id: str) -> dict[str, Any]:
         await remove_agent_fga(request, agent_id=str(agent.id), project_id=str(project.id))
         delete_agent(session, agent)
         return {"deleted": True, "agent_id": str(agent_uuid)}
+
+
+async def update_agent_by_id(
+    request: Request,
+    agent_id: str,
+    name: str,
+    graph_id: str,
+    runtime_base_url: str,
+    description: str,
+) -> dict[str, str]:
+    acting_user_id = current_user_id_from_request(request)
+    agent_uuid = parse_uuid(agent_id)
+    if agent_uuid is None:
+        raise HTTPException(status_code=400, detail="Invalid agent_id")
+
+    session_factory = db_session_factory_from_request(request)
+    with session_scope(session_factory) as session:
+        agent = get_agent(session, agent_uuid)
+        if agent is None:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        project = get_project(session, agent.project_id)
+        if project is None:
+            raise HTTPException(status_code=404, detail="Project not found")
+        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        updated = update_agent(
+            session,
+            agent=agent,
+            name=name,
+            graph_id=graph_id,
+            runtime_base_url=runtime_base_url,
+            description=description,
+        )
+        return {
+            "id": str(updated.id),
+            "project_id": str(updated.project_id),
+            "name": updated.name,
+            "graph_id": updated.graph_id,
+            "runtime_base_url": updated.runtime_base_url,
+            "description": updated.description,
+        }

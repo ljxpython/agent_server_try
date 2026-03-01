@@ -1,15 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { toUserErrorMessage } from "@/lib/platform-api/errors";
 import { listAgents } from "@/lib/platform-api/agents";
-import { listRuntimeBindings } from "@/lib/platform-api/runtime-bindings";
+import { toUserErrorMessage } from "@/lib/platform-api/errors";
+import { deleteRuntimeBinding, listRuntimeBindings, upsertRuntimeBinding } from "@/lib/platform-api/runtime-bindings";
 import type { Agent, RuntimeBinding } from "@/lib/platform-api/types";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 const PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const ENV_OPTIONS = ["dev", "staging", "prod"] as const;
+
+type BindingForm = {
+  environment: (typeof ENV_OPTIONS)[number];
+  assistantId: string;
+  graphId: string;
+  runtimeBaseUrl: string;
+};
+
+const DEFAULT_BINDING_FORM: BindingForm = {
+  environment: "dev",
+  assistantId: "",
+  graphId: "",
+  runtimeBaseUrl: "",
+};
 
 export default function RuntimeBindingsPage() {
   const { projectId } = useWorkspaceContext();
@@ -21,12 +36,39 @@ export default function RuntimeBindingsPage() {
   const [sortBy, setSortBy] = useState<"created_at" | "environment">("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [bindingForm, setBindingForm] = useState<BindingForm>(DEFAULT_BINDING_FORM);
+
+  const refreshBindings = useCallback(async () => {
+    if (!agentId) {
+      setBindings([]);
+      setOffset(0);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const rows = await listRuntimeBindings(agentId, {
+        limit: pageSize,
+        offset,
+        sortBy,
+        sortOrder,
+      });
+      setBindings(rows);
+    } catch (err) {
+      setError(toUserErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [agentId, offset, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function run() {
+    async function loadAgents() {
       if (!projectId) {
         setAgents([]);
         setAgentId("");
@@ -41,8 +83,7 @@ export default function RuntimeBindingsPage() {
         const agentRows = await listAgents(projectId);
         if (cancelled) return;
         setAgents(agentRows);
-        const selected = agentRows[0]?.id ?? "";
-        setAgentId(selected);
+        setAgentId((prev) => (prev && agentRows.some((a) => a.id === prev) ? prev : (agentRows[0]?.id ?? "")));
       } catch (err) {
         if (cancelled) return;
         setError(toUserErrorMessage(err));
@@ -53,54 +94,69 @@ export default function RuntimeBindingsPage() {
       }
     }
 
-    run();
-
+    void loadAgents();
     return () => {
       cancelled = true;
     };
   }, [projectId]);
 
   useEffect(() => {
-    let cancelled = false;
+    void refreshBindings();
+  }, [refreshBindings]);
 
-    async function run() {
-      if (!agentId) {
-        setBindings([]);
-        setOffset(0);
-        return;
-      }
-      setLoading(true);
-      setError(null);
-      try {
-        const rows = await listRuntimeBindings(agentId, {
-          limit: pageSize,
-          offset,
-          sortBy,
-          sortOrder,
-        });
-        if (cancelled) return;
-        setBindings(rows);
-      } catch (err) {
-        if (cancelled) return;
-        setError(toUserErrorMessage(err));
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
+  async function onUpsertBinding(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!agentId) return;
+
+    setSubmitting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const saved = await upsertRuntimeBinding(agentId, {
+        environment: bindingForm.environment,
+        langgraph_assistant_id: bindingForm.assistantId.trim(),
+        langgraph_graph_id: bindingForm.graphId.trim(),
+        runtime_base_url: bindingForm.runtimeBaseUrl.trim(),
+      });
+      setNotice(`Saved binding: ${saved.environment}`);
+      await refreshBindings();
+    } catch (err) {
+      setError(toUserErrorMessage(err));
+    } finally {
+      setSubmitting(false);
     }
+  }
 
-    run();
+  async function onDeleteBinding(binding: RuntimeBinding) {
+    if (!agentId) return;
+    setRemovingId(binding.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await deleteRuntimeBinding(agentId, binding.id);
+      setNotice(`Deleted binding: ${binding.environment}`);
+      await refreshBindings();
+    } catch (err) {
+      setError(toUserErrorMessage(err));
+    } finally {
+      setRemovingId(null);
+    }
+  }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [agentId, offset, pageSize, sortBy, sortOrder]);
+  function startEditBinding(binding: RuntimeBinding) {
+    setBindingForm({
+      environment: binding.environment as BindingForm["environment"],
+      assistantId: binding.langgraph_assistant_id,
+      graphId: binding.langgraph_graph_id,
+      runtimeBaseUrl: binding.runtime_base_url,
+    });
+    setNotice(`Editing binding: ${binding.environment}`);
+  }
 
   return (
     <section className="p-6">
       <h2 className="text-xl font-semibold">Runtime Bindings</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Select an agent to view environment bindings.</p>
+      <p className="text-muted-foreground mt-2 text-sm">Select an agent and create/update environment bindings.</p>
 
       {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
 
@@ -185,18 +241,81 @@ export default function RuntimeBindingsPage() {
         </div>
       ) : null}
 
+      {projectId && agentId ? (
+        <form className="mt-4 grid gap-2 rounded-md border p-3" onSubmit={onUpsertBinding}>
+          <h3 className="text-sm font-medium">Create / Update binding</h3>
+          <div className="grid gap-2 md:grid-cols-2">
+            <select
+              className="bg-background rounded-md border px-2 py-1 text-sm"
+              value={bindingForm.environment}
+              onChange={(event) =>
+                setBindingForm((prev) => ({ ...prev, environment: event.target.value as BindingForm["environment"] }))
+              }
+              disabled={loading || submitting}
+            >
+              {ENV_OPTIONS.map((env) => (
+                <option key={env} value={env}>
+                  {env}
+                </option>
+              ))}
+            </select>
+            <input
+              className="bg-background rounded-md border px-2 py-1 text-sm"
+              placeholder="Assistant ID"
+              value={bindingForm.assistantId}
+              onChange={(event) => setBindingForm((prev) => ({ ...prev, assistantId: event.target.value }))}
+              disabled={loading || submitting}
+              required
+              minLength={2}
+              maxLength={128}
+            />
+            <input
+              className="bg-background rounded-md border px-2 py-1 text-sm"
+              placeholder="Graph ID"
+              value={bindingForm.graphId}
+              onChange={(event) => setBindingForm((prev) => ({ ...prev, graphId: event.target.value }))}
+              disabled={loading || submitting}
+              required
+              minLength={2}
+              maxLength={128}
+            />
+            <input
+              className="bg-background rounded-md border px-2 py-1 text-sm"
+              placeholder="Runtime URL"
+              value={bindingForm.runtimeBaseUrl}
+              onChange={(event) => setBindingForm((prev) => ({ ...prev, runtimeBaseUrl: event.target.value }))}
+              disabled={loading || submitting}
+              required
+              minLength={10}
+              maxLength={512}
+            />
+          </div>
+          <div>
+            <button
+              type="submit"
+              className="bg-background rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+              disabled={loading || submitting}
+            >
+              {submitting ? "Saving..." : "Save binding"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+
       {loading ? <p className="mt-4 text-sm">Loading...</p> : null}
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {notice ? <p className="mt-4 text-sm text-green-700">{notice}</p> : null}
 
       {!loading && !error && agentId ? (
         <div className="mt-4 overflow-auto rounded-md border">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-3 py-2">Environment</th>
                 <th className="px-3 py-2">Assistant ID</th>
                 <th className="px-3 py-2">Graph ID</th>
                 <th className="px-3 py-2">Runtime URL</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -206,11 +325,31 @@ export default function RuntimeBindingsPage() {
                   <td className="px-3 py-2">{binding.langgraph_assistant_id}</td>
                   <td className="px-3 py-2">{binding.langgraph_graph_id}</td>
                   <td className="px-3 py-2">{binding.runtime_base_url}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
+                        onClick={() => startEditBinding(binding)}
+                        disabled={loading || submitting || removingId === binding.id}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
+                        onClick={() => void onDeleteBinding(binding)}
+                        disabled={loading || submitting || removingId === binding.id}
+                      >
+                        {removingId === binding.id ? "Deleting..." : "Delete"}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {bindings.length === 0 ? (
                 <tr>
-                  <td className="text-muted-foreground px-3 py-4" colSpan={4}>
+                  <td className="text-muted-foreground px-3 py-4" colSpan={5}>
                     No runtime bindings found.
                   </td>
                 </tr>
