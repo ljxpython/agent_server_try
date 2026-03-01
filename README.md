@@ -13,6 +13,13 @@ without changing its request paths.
 - `PROXY_CORS_ALLOW_ORIGINS` (default: `*`, comma-separated)
 - `PROXY_UPSTREAM_RETRIES` (default: `1`)
 - `PROXY_LOG_LEVEL` (default: `INFO`)
+- `API_DOCS_ENABLED` (default: `false`, exposes `/docs`, `/redoc`, `/openapi.json`)
+- `DEV_AUTH_BYPASS_ENABLED` (default: `false`, local development only; bypasses Keycloak verification)
+- `DEV_AUTH_BYPASS_MODE` (default: `fixed`, supported: `fixed` / `anonymous`)
+- `DEV_AUTH_BYPASS_SUBJECT` (default: `dev-local-user`, used when mode is `fixed`)
+- `DEV_AUTH_BYPASS_EMAIL` (optional, used when mode is `fixed`)
+- `DEV_AUTH_BYPASS_ROLE` (default: `owner`, supported: `owner` / `admin` / `member`)
+- `DEV_AUTH_BYPASS_MEMBERSHIP_ENABLED` (default: `true`, bypasses tenant membership/admin checks in platform APIs)
 - `RUNTIME_ROLE_ENFORCEMENT_ENABLED` (default: `false`, blocks runtime write methods for `member` role when tenant context exists)
 - `PLATFORM_DB_ENABLED` (default: `false`)
 - `PLATFORM_DB_AUTO_CREATE` (default: `false`)
@@ -40,6 +47,33 @@ without changing its request paths.
 
 ```bash
 uv run uvicorn main:app --host 0.0.0.0 --port 2024 --reload
+```
+
+## Recommended profiles
+
+### Local development (no login required)
+
+```env
+PLATFORM_DB_ENABLED=true
+PLATFORM_DB_AUTO_CREATE=true
+DATABASE_URL=postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform
+
+API_DOCS_ENABLED=true
+DEV_AUTH_BYPASS_ENABLED=true
+DEV_AUTH_BYPASS_MODE=fixed
+DEV_AUTH_BYPASS_SUBJECT=dev-local-user
+DEV_AUTH_BYPASS_EMAIL=dev-local@example.com
+DEV_AUTH_BYPASS_ROLE=owner
+DEV_AUTH_BYPASS_MEMBERSHIP_ENABLED=true
+```
+
+### Staging/Production (strict auth)
+
+```env
+API_DOCS_ENABLED=false
+DEV_AUTH_BYPASS_ENABLED=false
+KEYCLOAK_AUTH_ENABLED=true
+KEYCLOAK_AUTH_REQUIRED=true
 ```
 
 ## Health check

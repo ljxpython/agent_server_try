@@ -171,6 +171,14 @@ uv run python scripts/setup_openfga.py
 ```env
 DATABASE_URL=postgresql+psycopg://<user>:<pwd>@<host>:5432/<db>
 
+API_DOCS_ENABLED=false
+DEV_AUTH_BYPASS_ENABLED=false
+DEV_AUTH_BYPASS_MODE=fixed
+DEV_AUTH_BYPASS_SUBJECT=dev-local-user
+DEV_AUTH_BYPASS_EMAIL=
+DEV_AUTH_BYPASS_ROLE=owner
+DEV_AUTH_BYPASS_MEMBERSHIP_ENABLED=false
+
 KEYCLOAK_AUTH_ENABLED=true
 KEYCLOAK_AUTH_REQUIRED=true
 KEYCLOAK_ISSUER=https://<your-keycloak-host>/realms/agent-platform

@@ -57,6 +57,23 @@ KEYCLOAK_JWKS_URL=
 KEYCLOAK_JWKS_CACHE_TTL_SECONDS=300
 ```
 
+本地开发如果需要“无登录也能调平台接口”，开启以下开关：
+
+```env
+DEV_AUTH_BYPASS_ENABLED=true
+DEV_AUTH_BYPASS_MODE=fixed
+DEV_AUTH_BYPASS_SUBJECT=dev-local-user
+DEV_AUTH_BYPASS_EMAIL=dev-local@example.com
+DEV_AUTH_BYPASS_ROLE=owner
+DEV_AUTH_BYPASS_MEMBERSHIP_ENABLED=true
+```
+
+说明：
+
+- `fixed`：注入固定开发用户（推荐，行为稳定）。
+- `anonymous`：注入匿名开发用户（`sub=dev-anonymous`）。
+- 该模式仅用于本地开发；staging/prod 必须关闭。
+
 ### 4) 启动代理服务
 
 ```bash
@@ -231,7 +248,9 @@ KEYCLOAK_ISSUER=http://127.0.0.1:18080/realms/agent-platform
 ### 使用方式
 
 1. 打开 `http://127.0.0.1:3000/auth/login`
-2. 点击 `Continue with Keycloak`
+2. 可选两种登录方式：
+   - 浏览器跳转：点击 `Continue with Keycloak`
+   - 账户密码直登：填写 `username/password`，点击 `Sign in with account`
 3. 登录后回到 `workspace`，token 自动写入浏览器存储并用于 API 调用
 
 > 兼容说明：原 `/api/keycloak-token` 自动模式仍可保留作本地兜底，但推荐默认使用 OIDC 浏览器登录流。
