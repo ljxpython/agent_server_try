@@ -158,3 +158,9 @@ src/lib/platform-api/
   - `auth/callback`
   - `/api/auth/oidc/token`
 - 已新增 workspace 登录/登出入口（OIDC 开关启用时可见）。
+
+## 联动进展（后端 Step 3）
+
+- 控制平面 API 已进入 service 分层重构，`/_platform/*` 行为契约保持不变。
+- 前端当前无需改动即可继续使用现有平台 API 封装。
+- 后端已完成 Step 3 第二轮领域拆分（tenant/membership/project/agent/binding/audit），前端接口消费路径保持不变。

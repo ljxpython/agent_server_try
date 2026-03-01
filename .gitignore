@@ -337,6 +337,8 @@ test_*.py
 !/uitest/playwright.config.ts
 !/uitest/package.json
 !/tests/
+!/tests/test_*.py
+!/tests/**/*_test.py
 !/frontend/src/pages/test/
 
 ### Vuejs ###

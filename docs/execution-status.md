@@ -2,7 +2,7 @@
 
 ## 当前焦点
 
-前后端收尾开发（Step 2 已完成，进入 Step 3）
+前后端收尾开发（Step 2 已完成，Step 3 第二轮已落地）
 
 ## 总体进度
 
@@ -93,8 +93,20 @@
 
 ## 下一步
 
-1. Step 3：实现 `app/services/` 分层，把控制平面业务规则从 API 层逐步下沉。
+1. Step 3：完成尾项收敛（按模块补齐最小单测与结构文档同步）。
 2. Step 4：补齐前端平台页写操作闭环与回归用例。
+
+## Step 3 本轮完成项
+
+1. 新增 service 层文件：`app/services/platform_service.py`。
+2. 将平台核心业务流程从 `app/api/platform.py` 下沉到 service 层（tenant/membership/project/agent/runtime bindings/audit）。
+3. `app/api/platform.py` 改为薄路由，保留参数校验、响应模型和 `x-total-count` 头处理。
+4. 保持错误语义与行为契约不变（400/401/403/404/409/503）。
+5. 验证通过：`python3 -m py_compile app/api/platform.py app/services/platform_service.py`（第一轮）。
+6. 已完成第二轮拆分：新增 `app/services/platform_common.py`、`tenant_service.py`、`membership_service.py`、`project_service.py`、`agent_service.py`、`binding_service.py`、`audit_service.py`。
+7. `app/services/platform_service.py` 改为兼容导出层，API 路由调用保持不变。
+8. 新增契约回归测试：`tests/test_platform_api_contract.py`。
+9. 新一轮验证通过：`PYTHONPATH=. uv run pytest -q`（3 passed）、`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）。
 
 ## 步骤执行规则
 

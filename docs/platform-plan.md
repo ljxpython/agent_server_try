@@ -129,6 +129,18 @@
   - service 层承载核心业务流程。
   - 回归测试通过，接口行为不变。
 
+状态：进行中（第二轮已完成）。
+
+本轮落地：
+- 新增 `app/services/platform_service.py`，承接 tenant/membership/project/agent/runtime-binding/audit 业务流程。
+- `app/api/platform.py` 已重构为薄路由层，仅保留参数约束、响应模型与响应头处理。
+- 接口路径、状态码语义、分页头（`x-total-count`）与 OpenFGA 同步行为保持不变。
+
+第二轮落地：
+- `app/services` 已按领域拆分：`platform_common/tenant/membership/project/agent/binding/audit`。
+- `app/services/platform_service.py` 保留兼容导出，避免 API 层改动扩大。
+- 新增契约回归测试：`tests/test_platform_api_contract.py`（分页头、CSV 导出契约、审计响应结构）。
+
 ### Step 4
 
 前端平台页能力补齐（写操作与完整流程）
