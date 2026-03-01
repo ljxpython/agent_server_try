@@ -160,3 +160,4 @@
 - 前端补齐写闭环：agents 支持 create/update/delete，runtime-bindings 支持 upsert/delete 与编辑回填。
 - 回归覆盖扩展到写流程：`agent-chat-ui/tests/platform-regression.spec.ts` 新增 create/update/delete/upsert 场景。
 - 验证结果：`PYTHONPATH=. uv run pytest -q`（8 passed）、`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）、`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`（8 passed）。
+- 增强回归补齐跨租户/跨项目切换场景：写操作目标项目正确性与 403 权限拒绝提示一致性（Playwright 10 passed）。

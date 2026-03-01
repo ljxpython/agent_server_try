@@ -107,6 +107,8 @@
 7. 后端冒烟验证通过：`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）。
 8. 前端构建验证通过：`cd agent-chat-ui && pnpm build`。
 9. 前端 Playwright 回归扩展并通过：`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`（8 passed）。
+10. Step 4 增强回归已落地：新增跨租户/跨项目切换下写操作目标校验与 403 权限拒绝场景。
+11. 增强回归验证通过：`cd agent-chat-ui && pnpm exec playwright test tests/platform-regression.spec.ts`（10 passed）。
 
 ## Step 3 本轮完成项
 
