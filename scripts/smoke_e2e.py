@@ -142,7 +142,7 @@ def main() -> None:
         project_id = project_response.json()["id"]
 
         agent_response = requests.post(
-            f"{base_url}/_platform/agents",
+            f"{base_url}/_platform/assistants",
             headers=owner_json_headers,
             json={
                 "project_id": project_id,
@@ -154,7 +154,7 @@ def main() -> None:
             timeout=10,
         )
         if agent_response.status_code != 200:
-            _fail(f"create agent failed: {agent_response.status_code} {agent_response.text}")
+            _fail(f"create assistant failed: {agent_response.status_code} {agent_response.text}")
         agent_id = agent_response.json()["id"]
 
         member_read = requests.get(

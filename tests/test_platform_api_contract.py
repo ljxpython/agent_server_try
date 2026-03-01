@@ -86,15 +86,15 @@ def test_query_audit_logs_response_shape(monkeypatch):
 
 def test_delete_agent_404_contract(monkeypatch):
     async def fake_delete_agent(*args, **kwargs):
-        raise HTTPException(status_code=404, detail="Agent not found")
+        raise HTTPException(status_code=404, detail="Assistant not found")
 
     monkeypatch.setattr("app.api.platform.delete_agent_by_id", fake_delete_agent)
 
     with _build_client() as client:
-        resp = client.delete("/_platform/agents/a1")
+        resp = client.delete("/_platform/assistants/a1")
 
     assert resp.status_code == 404
-    assert resp.json()["detail"] == "Agent not found"
+    assert resp.json()["detail"] == "Assistant not found"
 
 
 def test_delete_project_400_contract(monkeypatch):
@@ -146,7 +146,7 @@ def test_create_agent_403_contract(monkeypatch):
         "description": "",
     }
     with _build_client() as client:
-        resp = client.post("/_platform/agents", json=payload)
+        resp = client.post("/_platform/assistants", json=payload)
 
     assert resp.status_code == 403
     assert resp.json()["detail"] == "Only owner/admin can perform this action"
@@ -172,7 +172,7 @@ def test_update_agent_contract(monkeypatch):
         "description": "updated",
     }
     with _build_client() as client:
-        resp = client.patch("/_platform/agents/agent-1", json=payload)
+        resp = client.patch("/_platform/assistants/agent-1", json=payload)
 
     assert resp.status_code == 200
     assert resp.json()["name"] == "Updated Agent"
@@ -180,12 +180,12 @@ def test_update_agent_contract(monkeypatch):
 
 def test_delete_runtime_binding_404_contract(monkeypatch):
     async def fake_delete_binding(*args, **kwargs):
-        raise HTTPException(status_code=404, detail="Runtime binding not found")
+        raise HTTPException(status_code=404, detail="Environment mapping not found")
 
     monkeypatch.setattr("app.api.platform.delete_runtime_binding_by_id", fake_delete_binding)
 
     with _build_client() as client:
-        resp = client.delete("/_platform/agents/agent-1/bindings/binding-1")
+        resp = client.delete("/_platform/assistants/agent-1/environment-mappings/binding-1")
 
     assert resp.status_code == 404
-    assert resp.json()["detail"] == "Runtime binding not found"
+    assert resp.json()["detail"] == "Environment mapping not found"

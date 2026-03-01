@@ -79,7 +79,7 @@ class ProjectResponse(BaseModel):
     name: str
 
 
-class CreateAgentRequest(BaseModel):
+class CreateAssistantRequest(BaseModel):
     project_id: str
     name: str = Field(min_length=2, max_length=128)
     graph_id: str = Field(min_length=2, max_length=128)
@@ -87,14 +87,14 @@ class CreateAgentRequest(BaseModel):
     description: str = Field(default="", max_length=2000)
 
 
-class UpdateAgentRequest(BaseModel):
+class UpdateAssistantRequest(BaseModel):
     name: str = Field(min_length=2, max_length=128)
     graph_id: str = Field(min_length=2, max_length=128)
     runtime_base_url: str = Field(min_length=10, max_length=512)
     description: str = Field(default="", max_length=2000)
 
 
-class AgentResponse(BaseModel):
+class AssistantResponse(BaseModel):
     id: str
     project_id: str
     name: str
@@ -103,23 +103,23 @@ class AgentResponse(BaseModel):
     description: str
 
 
-class UpsertRuntimeBindingRequest(BaseModel):
+class UpsertEnvironmentMappingRequest(BaseModel):
     environment: str = Field(default="dev", pattern="^(dev|staging|prod)$")
     langgraph_assistant_id: str = Field(min_length=2, max_length=128)
     langgraph_graph_id: str = Field(min_length=2, max_length=128)
     runtime_base_url: str = Field(min_length=10, max_length=512)
 
 
-class RuntimeBindingResponse(BaseModel):
+class EnvironmentMappingResponse(BaseModel):
     id: str
-    agent_id: str
+    assistant_id: str
     environment: str
     langgraph_assistant_id: str
     langgraph_graph_id: str
     runtime_base_url: str
 
 
-class DeleteRuntimeBindingResponse(BaseModel):
+class DeleteEnvironmentMappingResponse(BaseModel):
     deleted: bool
     binding_id: str
 
@@ -280,8 +280,8 @@ async def update_project_endpoint(request: Request, project_id: str, payload: Up
     return ProjectResponse(**row)
 
 
-@router.get("/projects/{project_id}/agents", response_model=list[AgentResponse])
-async def list_agents(
+@router.get("/projects/{project_id}/assistants", response_model=list[AssistantResponse])
+async def list_assistants(
     request: Request,
     response: Response,
     project_id: str,
@@ -291,7 +291,7 @@ async def list_agents(
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ):
     logger.info(
-        "platform_list_agents request_id=%s project_id=%s limit=%s offset=%s",
+        "platform_list_assistants request_id=%s project_id=%s limit=%s offset=%s",
         getattr(request.state, "request_id", "-"),
         project_id,
         limit,
@@ -299,13 +299,13 @@ async def list_agents(
     )
     rows, total = await list_agents_for_project_id(request, project_id, limit, offset, sort_by, sort_order)
     response.headers["x-total-count"] = str(total)
-    return [AgentResponse(**row) for row in rows]
+    return [AssistantResponse(**row) for row in rows]
 
 
-@router.post("/agents", response_model=AgentResponse)
-async def create_agent_endpoint(request: Request, payload: CreateAgentRequest):
+@router.post("/assistants", response_model=AssistantResponse)
+async def create_assistant_endpoint(request: Request, payload: CreateAssistantRequest):
     logger.info(
-        "platform_create_agent request_id=%s project_id=%s name=%s graph_id=%s",
+        "platform_create_assistant request_id=%s project_id=%s name=%s graph_id=%s",
         getattr(request.state, "request_id", "-"),
         payload.project_id,
         payload.name,
@@ -319,89 +319,117 @@ async def create_agent_endpoint(request: Request, payload: CreateAgentRequest):
         runtime_base_url=payload.runtime_base_url,
         description=payload.description,
     )
-    return AgentResponse(**row)
+    return AssistantResponse(**row)
 
 
-@router.delete("/agents/{agent_id}")
-async def delete_agent_endpoint(request: Request, agent_id: str):
+@router.delete("/assistants/{assistant_id}")
+async def delete_assistant_endpoint(request: Request, assistant_id: str):
     logger.info(
-        "platform_delete_agent request_id=%s agent_id=%s",
+        "platform_delete_assistant request_id=%s assistant_id=%s",
         getattr(request.state, "request_id", "-"),
-        agent_id,
+        assistant_id,
     )
-    return await delete_agent_by_id(request, agent_id)
+    row = await delete_agent_by_id(request, assistant_id)
+    return {
+        "deleted": bool(row.get("deleted")),
+        "assistant_id": str(row.get("agent_id", "")),
+    }
 
 
-@router.patch("/agents/{agent_id}", response_model=AgentResponse)
-async def update_agent_endpoint(request: Request, agent_id: str, payload: UpdateAgentRequest):
+@router.patch("/assistants/{assistant_id}", response_model=AssistantResponse)
+async def update_assistant_endpoint(request: Request, assistant_id: str, payload: UpdateAssistantRequest):
     logger.info(
-        "platform_update_agent request_id=%s agent_id=%s name=%s graph_id=%s",
+        "platform_update_assistant request_id=%s assistant_id=%s name=%s graph_id=%s",
         getattr(request.state, "request_id", "-"),
-        agent_id,
+        assistant_id,
         payload.name,
         payload.graph_id,
     )
     row = await update_agent_by_id(
         request,
-        agent_id=agent_id,
+        agent_id=assistant_id,
         name=payload.name,
         graph_id=payload.graph_id,
         runtime_base_url=payload.runtime_base_url,
         description=payload.description,
     )
-    return AgentResponse(**row)
+    return AssistantResponse(**row)
 
 
-@router.get("/agents/{agent_id}/bindings", response_model=list[RuntimeBindingResponse])
-async def list_agent_bindings(
+@router.get("/assistants/{assistant_id}/environment-mappings", response_model=list[EnvironmentMappingResponse])
+async def list_environment_mappings(
     request: Request,
     response: Response,
-    agent_id: str,
+    assistant_id: str,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     sort_by: str = Query(default="created_at", pattern="^(created_at|environment)$"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
 ):
     logger.info(
-        "platform_list_bindings request_id=%s agent_id=%s",
+        "platform_list_environment_mappings request_id=%s assistant_id=%s",
         getattr(request.state, "request_id", "-"),
-        agent_id,
+        assistant_id,
     )
-    rows, total = await list_agent_bindings_by_agent_id(request, agent_id, limit, offset, sort_by, sort_order)
+    rows, total = await list_agent_bindings_by_agent_id(request, assistant_id, limit, offset, sort_by, sort_order)
     response.headers["x-total-count"] = str(total)
-    return [RuntimeBindingResponse(**row) for row in rows]
+    return [
+        EnvironmentMappingResponse(
+            id=row["id"],
+            assistant_id=row["agent_id"],
+            environment=row["environment"],
+            langgraph_assistant_id=row["langgraph_assistant_id"],
+            langgraph_graph_id=row["langgraph_graph_id"],
+            runtime_base_url=row["runtime_base_url"],
+        )
+        for row in rows
+    ]
 
 
-@router.post("/agents/{agent_id}/bindings", response_model=RuntimeBindingResponse)
-async def upsert_agent_binding(request: Request, agent_id: str, payload: UpsertRuntimeBindingRequest):
+@router.post("/assistants/{assistant_id}/environment-mappings", response_model=EnvironmentMappingResponse)
+async def upsert_environment_mapping(
+    request: Request,
+    assistant_id: str,
+    payload: UpsertEnvironmentMappingRequest,
+):
     logger.info(
-        "platform_upsert_binding request_id=%s agent_id=%s env=%s graph_id=%s",
+        "platform_upsert_environment_mapping request_id=%s assistant_id=%s env=%s graph_id=%s",
         getattr(request.state, "request_id", "-"),
-        agent_id,
+        assistant_id,
         payload.environment,
         payload.langgraph_graph_id,
     )
     row = await upsert_agent_binding_by_agent_id(
         request,
-        agent_id=agent_id,
+        agent_id=assistant_id,
         environment=payload.environment,
         langgraph_assistant_id=payload.langgraph_assistant_id,
         langgraph_graph_id=payload.langgraph_graph_id,
         runtime_base_url=payload.runtime_base_url,
     )
-    return RuntimeBindingResponse(**row)
-
-
-@router.delete("/agents/{agent_id}/bindings/{binding_id}", response_model=DeleteRuntimeBindingResponse)
-async def delete_runtime_binding_endpoint(request: Request, agent_id: str, binding_id: str):
-    logger.info(
-        "platform_delete_binding request_id=%s agent_id=%s binding_id=%s",
-        getattr(request.state, "request_id", "-"),
-        agent_id,
-        binding_id,
+    return EnvironmentMappingResponse(
+        id=row["id"],
+        assistant_id=row["agent_id"],
+        environment=row["environment"],
+        langgraph_assistant_id=row["langgraph_assistant_id"],
+        langgraph_graph_id=row["langgraph_graph_id"],
+        runtime_base_url=row["runtime_base_url"],
     )
-    row = await delete_runtime_binding_by_id(request, agent_id=agent_id, binding_id=binding_id)
-    return DeleteRuntimeBindingResponse(
+
+
+@router.delete(
+    "/assistants/{assistant_id}/environment-mappings/{mapping_id}",
+    response_model=DeleteEnvironmentMappingResponse,
+)
+async def delete_environment_mapping_endpoint(request: Request, assistant_id: str, mapping_id: str):
+    logger.info(
+        "platform_delete_environment_mapping request_id=%s assistant_id=%s mapping_id=%s",
+        getattr(request.state, "request_id", "-"),
+        assistant_id,
+        mapping_id,
+    )
+    row = await delete_runtime_binding_by_id(request, agent_id=assistant_id, binding_id=mapping_id)
+    return DeleteEnvironmentMappingResponse(
         deleted=bool(row.get("deleted")),
         binding_id=str(row.get("binding_id", "")),
     )

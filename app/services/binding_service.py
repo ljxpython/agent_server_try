@@ -31,13 +31,13 @@ async def list_agent_bindings_by_agent_id(
     acting_user_id = current_user_id_from_request(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
-        raise HTTPException(status_code=400, detail="Invalid agent_id")
+        raise HTTPException(status_code=400, detail="Invalid assistant_id")
 
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         agent = get_agent(session, agent_uuid)
         if agent is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise HTTPException(status_code=404, detail="Assistant not found")
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -82,13 +82,13 @@ async def upsert_agent_binding_by_agent_id(
     acting_user_id = current_user_id_from_request(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
-        raise HTTPException(status_code=400, detail="Invalid agent_id")
+        raise HTTPException(status_code=400, detail="Invalid assistant_id")
 
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         agent = get_agent(session, agent_uuid)
         if agent is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise HTTPException(status_code=404, detail="Assistant not found")
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -120,7 +120,7 @@ async def delete_runtime_binding_by_id(request: Request, agent_id: str, binding_
     acting_user_id = current_user_id_from_request(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
-        raise HTTPException(status_code=400, detail="Invalid agent_id")
+        raise HTTPException(status_code=400, detail="Invalid assistant_id")
     binding_uuid = parse_uuid(binding_id)
     if binding_uuid is None:
         raise HTTPException(status_code=400, detail="Invalid binding_id")
@@ -129,7 +129,7 @@ async def delete_runtime_binding_by_id(request: Request, agent_id: str, binding_
     with session_scope(session_factory) as session:
         agent = get_agent(session, agent_uuid)
         if agent is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise HTTPException(status_code=404, detail="Assistant not found")
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -142,7 +142,7 @@ async def delete_runtime_binding_by_id(request: Request, agent_id: str, binding_
 
         binding = get_runtime_binding(session, binding_uuid)
         if binding is None or binding.agent_id != agent.id:
-            raise HTTPException(status_code=404, detail="Runtime binding not found")
+            raise HTTPException(status_code=404, detail="Environment mapping not found")
 
         delete_runtime_binding(session, binding)
         return {"deleted": True, "binding_id": str(binding_uuid)}

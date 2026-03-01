@@ -126,13 +126,13 @@ async def delete_agent_by_id(request: Request, agent_id: str) -> dict[str, Any]:
     acting_user_id = current_user_id_from_request(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
-        raise HTTPException(status_code=400, detail="Invalid agent_id")
+        raise HTTPException(status_code=400, detail="Invalid assistant_id")
 
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         agent = get_agent(session, agent_uuid)
         if agent is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise HTTPException(status_code=404, detail="Assistant not found")
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -158,13 +158,13 @@ async def update_agent_by_id(
     acting_user_id = current_user_id_from_request(request)
     agent_uuid = parse_uuid(agent_id)
     if agent_uuid is None:
-        raise HTTPException(status_code=400, detail="Invalid agent_id")
+        raise HTTPException(status_code=400, detail="Invalid assistant_id")
 
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         agent = get_agent(session, agent_uuid)
         if agent is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise HTTPException(status_code=404, detail="Assistant not found")
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
