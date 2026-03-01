@@ -26,8 +26,8 @@ import { ArrowRight } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
 import { logClient } from "@/lib/client-logger";
-import { listAgents } from "@/lib/platform-api/agents";
-import { listRuntimeBindings } from "@/lib/platform-api/runtime-bindings";
+import { listAssistants } from "@/lib/platform-api/assistants";
+import { listEnvironmentMappings } from "@/lib/platform-api/environment-mappings";
 import { isJwtToken } from "@/lib/token";
 import { useThreads } from "./Thread";
 import { useWorkspaceContext } from "./WorkspaceContext";
@@ -246,7 +246,8 @@ function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
 export const StreamProvider: FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { tenantId, projectId, agentId, setAgentId } = useWorkspaceContext();
+  const { tenantId, projectId, assistantId: selectedAssistantId, setAssistantId: setSelectedAssistantId } =
+    useWorkspaceContext();
   const autoTokenEnabled = process.env.NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN === "true";
 
   // Get environment variables
@@ -320,20 +321,20 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
       }
 
       try {
-        let resolvedAgentId = agentId;
+        let resolvedAssistantId = selectedAssistantId;
         let resolvedGraphId: string | null = null;
 
-        if (!resolvedAgentId) {
-          const agents = await listAgents(projectId, { limit: 1, sortBy: "created_at", sortOrder: "desc" });
-          if (cancelled || agents.length === 0) {
+        if (!resolvedAssistantId) {
+          const assistants = await listAssistants(projectId, { limit: 1, sortBy: "created_at", sortOrder: "desc" });
+          if (cancelled || assistants.length === 0) {
             return;
           }
-          resolvedAgentId = agents[0].id;
-          resolvedGraphId = agents[0].graph_id;
-          setAgentId(resolvedAgentId);
+          resolvedAssistantId = assistants[0].id;
+          resolvedGraphId = assistants[0].graph_id;
+          setSelectedAssistantId(resolvedAssistantId);
         }
 
-        const bindings = await listRuntimeBindings(resolvedAgentId, {
+        const bindings = await listEnvironmentMappings(resolvedAssistantId, {
           limit: 100,
           sortBy: "environment",
           sortOrder: "asc",
@@ -360,7 +361,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
             message: "Failed to auto-link chat target from project scope",
             context: {
               projectId,
-              agentId,
+              selectedAssistantId,
               error: String(error),
             },
           });
@@ -373,7 +374,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
     return () => {
       cancelled = true;
     };
-  }, [agentId, assistantId, projectId, setAgentId, setAssistantId]);
+  }, [projectId, selectedAssistantId, assistantId, setSelectedAssistantId, setAssistantId]);
 
   useEffect(() => {
     if (!autoTokenEnabled) {

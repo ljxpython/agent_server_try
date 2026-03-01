@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { listAgents } from "@/lib/platform-api/agents";
+import { listAssistants } from "@/lib/platform-api/assistants";
 import { toUserErrorMessage } from "@/lib/platform-api/errors";
-import { deleteRuntimeBinding, listRuntimeBindings, upsertRuntimeBinding } from "@/lib/platform-api/runtime-bindings";
-import type { Agent, RuntimeBinding } from "@/lib/platform-api/types";
+import {
+  deleteEnvironmentMapping,
+  listEnvironmentMappings,
+  upsertEnvironmentMapping,
+} from "@/lib/platform-api/environment-mappings";
+import type { AssistantProfile, EnvironmentMapping } from "@/lib/platform-api/types";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 const PAGE_SIZE = 20;
@@ -30,9 +34,9 @@ const DEFAULT_BINDING_FORM: BindingForm = {
 };
 
 export default function RuntimeBindingsPage() {
-  const { projectId, agentId, setAgentId } = useWorkspaceContext();
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [bindings, setBindings] = useState<RuntimeBinding[]>([]);
+  const { projectId, assistantId, setAssistantId } = useWorkspaceContext();
+  const [assistants, setAssistants] = useState<AssistantProfile[]>([]);
+  const [bindings, setBindings] = useState<EnvironmentMapping[]>([]);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
   const [sortBy, setSortBy] = useState<"created_at" | "environment">("created_at");
@@ -45,7 +49,7 @@ export default function RuntimeBindingsPage() {
   const [bindingForm, setBindingForm] = useState<BindingForm>(DEFAULT_BINDING_FORM);
 
   const refreshBindings = useCallback(async () => {
-    if (!agentId) {
+    if (!assistantId) {
       setBindings([]);
       setOffset(0);
       return;
@@ -53,7 +57,7 @@ export default function RuntimeBindingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await listRuntimeBindings(agentId, {
+      const rows = await listEnvironmentMappings(assistantId, {
         limit: pageSize,
         offset,
         sortBy,
@@ -65,15 +69,15 @@ export default function RuntimeBindingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [agentId, offset, pageSize, sortBy, sortOrder]);
+  }, [assistantId, offset, pageSize, sortBy, sortOrder]);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadAgents() {
+    async function loadAssistants() {
       if (!projectId) {
-        setAgents([]);
-        setAgentId("");
+        setAssistants([]);
+        setAssistantId("");
         setBindings([]);
         setOffset(0);
         setError(null);
@@ -82,13 +86,13 @@ export default function RuntimeBindingsPage() {
       setLoading(true);
       setError(null);
       try {
-        const agentRows = await listAgents(projectId);
+        const assistantRows = await listAssistants(projectId);
         if (cancelled) return;
-        setAgents(agentRows);
-        if (agentRows.length === 0) {
-          setAgentId("");
-        } else if (!agentId || !agentRows.some((a) => a.id === agentId)) {
-          setAgentId(agentRows[0].id);
+        setAssistants(assistantRows);
+        if (assistantRows.length === 0) {
+          setAssistantId("");
+        } else if (!assistantId || !assistantRows.some((a) => a.id === assistantId)) {
+          setAssistantId(assistantRows[0].id);
         }
       } catch (err) {
         if (cancelled) return;
@@ -100,11 +104,11 @@ export default function RuntimeBindingsPage() {
       }
     }
 
-    void loadAgents();
+    void loadAssistants();
     return () => {
       cancelled = true;
     };
-  }, [agentId, projectId, setAgentId]);
+  }, [assistantId, projectId, setAssistantId]);
 
   useEffect(() => {
     void refreshBindings();
@@ -112,13 +116,13 @@ export default function RuntimeBindingsPage() {
 
   async function onUpsertBinding(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!agentId) return;
+    if (!assistantId) return;
 
     setSubmitting(true);
     setError(null);
     setNotice(null);
     try {
-      const saved = await upsertRuntimeBinding(agentId, {
+      const saved = await upsertEnvironmentMapping(assistantId, {
         environment: bindingForm.environment,
         langgraph_assistant_id: bindingForm.assistantId.trim(),
         langgraph_graph_id: bindingForm.graphId.trim(),
@@ -133,13 +137,13 @@ export default function RuntimeBindingsPage() {
     }
   }
 
-  async function onDeleteBinding(binding: RuntimeBinding) {
-    if (!agentId) return;
+  async function onDeleteBinding(binding: EnvironmentMapping) {
+    if (!assistantId) return;
     setRemovingId(binding.id);
     setError(null);
     setNotice(null);
     try {
-      await deleteRuntimeBinding(agentId, binding.id);
+      await deleteEnvironmentMapping(assistantId, binding.id);
       setNotice(`Deleted environment mapping: ${binding.environment}`);
       await refreshBindings();
     } catch (err) {
@@ -149,7 +153,7 @@ export default function RuntimeBindingsPage() {
     }
   }
 
-  function startEditBinding(binding: RuntimeBinding) {
+  function startEditBinding(binding: EnvironmentMapping) {
     setBindingForm({
       environment: binding.environment as BindingForm["environment"],
       assistantId: binding.langgraph_assistant_id,
@@ -172,14 +176,14 @@ export default function RuntimeBindingsPage() {
             <span className="text-muted-foreground mr-2">Assistant profile</span>
             <select
               className="bg-background rounded-md border px-2 py-1"
-              value={agentId}
-              onChange={(event) => setAgentId(event.target.value)}
-              disabled={loading || agents.length === 0}
+              value={assistantId}
+              onChange={(event) => setAssistantId(event.target.value)}
+              disabled={loading || assistants.length === 0}
             >
               <option value="">Select assistant profile</option>
-              {agents.map((agent) => (
-                <option key={agent.id} value={agent.id}>
-                  {agent.name}
+              {assistants.map((assistant) => (
+                <option key={assistant.id} value={assistant.id}>
+                  {assistant.name}
                 </option>
               ))}
             </select>
@@ -231,7 +235,7 @@ export default function RuntimeBindingsPage() {
             type="button"
             className="bg-background rounded-md border px-2 py-1 text-sm disabled:opacity-50"
             onClick={() => setOffset((prev) => Math.max(0, prev - pageSize))}
-            disabled={loading || offset === 0 || !agentId}
+            disabled={loading || offset === 0 || !assistantId}
           >
             Prev
           </button>
@@ -239,7 +243,7 @@ export default function RuntimeBindingsPage() {
             type="button"
             className="bg-background rounded-md border px-2 py-1 text-sm disabled:opacity-50"
             onClick={() => setOffset((prev) => prev + pageSize)}
-            disabled={loading || bindings.length < pageSize || !agentId}
+            disabled={loading || bindings.length < pageSize || !assistantId}
           >
             Next
           </button>
@@ -247,7 +251,7 @@ export default function RuntimeBindingsPage() {
         </div>
       ) : null}
 
-      {projectId && agentId ? (
+      {projectId && assistantId ? (
         <form className="mt-4 grid gap-2 rounded-md border p-3" onSubmit={onUpsertBinding}>
           <h3 className="text-sm font-medium">Create / Update environment mapping</h3>
           <div className="grid gap-2 md:grid-cols-2">
@@ -301,7 +305,7 @@ export default function RuntimeBindingsPage() {
               className="bg-background rounded-md border px-3 py-1 text-sm disabled:opacity-50"
               disabled={loading || submitting}
             >
-              {submitting ? "Saving..." : "Save binding"}
+              {submitting ? "Saving..." : "Save mapping"}
             </button>
           </div>
         </form>
@@ -311,7 +315,7 @@ export default function RuntimeBindingsPage() {
       {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
       {notice ? <p className="mt-4 text-sm text-green-700">{notice}</p> : null}
 
-      {!loading && !error && agentId ? (
+      {!loading && !error && assistantId ? (
         <div className="mt-4 overflow-auto rounded-md border">
           <table className="w-full min-w-[860px] text-sm">
             <thead className="bg-muted/50 text-left">
@@ -355,7 +359,7 @@ export default function RuntimeBindingsPage() {
               {bindings.length === 0 ? (
                 <tr>
                   <td className="text-muted-foreground px-3 py-4" colSpan={5}>
-                    No runtime bindings found.
+                    No environment mappings found.
                   </td>
                 </tr>
               ) : null}

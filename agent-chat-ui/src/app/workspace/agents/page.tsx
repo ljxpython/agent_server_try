@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createAgent, deleteAgent, listAgents, updateAgent } from "@/lib/platform-api/agents";
+import { createAssistant, deleteAssistant, listAssistants, updateAssistant } from "@/lib/platform-api/assistants";
 import { toUserErrorMessage } from "@/lib/platform-api/errors";
-import type { Agent } from "@/lib/platform-api/types";
+import type { AssistantProfile } from "@/lib/platform-api/types";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 const PAGE_SIZE = 20;
@@ -27,8 +27,8 @@ const DEFAULT_FORM: AgentForm = {
 };
 
 export default function AgentsPage() {
-  const { projectId, agentId, setAgentId } = useWorkspaceContext();
-  const [items, setItems] = useState<Agent[]>([]);
+  const { projectId, assistantId, setAssistantId } = useWorkspaceContext();
+  const [items, setItems] = useState<AssistantProfile[]>([]);
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
   const [sortBy, setSortBy] = useState<"created_at" | "name">("created_at");
@@ -57,22 +57,22 @@ export default function AgentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const rows = await listAgents(projectId, {
+      const rows = await listAssistants(projectId, {
         limit: pageSize,
         offset,
         sortBy,
         sortOrder,
       });
       setItems(rows);
-      if (!agentId && rows.length > 0) {
-        setAgentId(rows[0].id);
+      if (!assistantId && rows.length > 0) {
+        setAssistantId(rows[0].id);
       }
     } catch (err) {
       setError(toUserErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, [agentId, offset, pageSize, projectId, setAgentId, sortBy, sortOrder]);
+  }, [assistantId, offset, pageSize, projectId, setAssistantId, sortBy, sortOrder]);
 
   useEffect(() => {
     void refreshList();
@@ -87,7 +87,7 @@ export default function AgentsPage() {
     }
   }, [projectId]);
 
-  function startEdit(agent: Agent) {
+function startEdit(agent: AssistantProfile) {
     setEditingId(agent.id);
     setForm({
       name: agent.name,
@@ -113,7 +113,7 @@ export default function AgentsPage() {
     setNotice(null);
     try {
       if (editingId) {
-        const updated = await updateAgent(editingId, {
+        const updated = await updateAssistant(editingId, {
           name: form.name.trim(),
           graph_id: form.graphId.trim(),
           runtime_base_url: form.runtimeBaseUrl.trim(),
@@ -121,7 +121,7 @@ export default function AgentsPage() {
         });
         setNotice(`Updated assistant profile: ${updated.name}`);
       } else {
-        const created = await createAgent({
+        const created = await createAssistant({
           project_id: projectId,
           name: form.name.trim(),
           graph_id: form.graphId.trim(),
@@ -130,7 +130,7 @@ export default function AgentsPage() {
         });
         setNotice(`Created assistant profile: ${created.name}`);
         setOffset(0);
-        setAgentId(created.id);
+        setAssistantId(created.id);
       }
       resetForm();
       await refreshList();
@@ -141,17 +141,17 @@ export default function AgentsPage() {
     }
   }
 
-  async function onDeleteAgent(agent: Agent) {
+  async function onDeleteAssistant(agent: AssistantProfile) {
     setRemovingId(agent.id);
     setError(null);
     setNotice(null);
     try {
-      await deleteAgent(agent.id);
+      await deleteAssistant(agent.id);
       if (editingId === agent.id) {
         resetForm();
       }
-      if (agentId === agent.id) {
-        setAgentId("");
+      if (assistantId === agent.id) {
+        setAssistantId("");
       }
       setNotice(`Deleted assistant profile: ${agent.name}`);
       await refreshList();
@@ -344,15 +344,15 @@ export default function AgentsPage() {
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        onClick={() => setAgentId(agent.id)}
-                        disabled={loading || submitting || removingId === agent.id || agentId === agent.id}
+                        onClick={() => setAssistantId(agent.id)}
+                        disabled={loading || submitting || removingId === agent.id || assistantId === agent.id}
                       >
-                        {agentId === agent.id ? "Selected" : "Use in Chat"}
+                        {assistantId === agent.id ? "Selected" : "Use in Chat"}
                       </button>
                       <button
                         type="button"
                         className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        onClick={() => void onDeleteAgent(agent)}
+                        onClick={() => void onDeleteAssistant(agent)}
                         disabled={loading || submitting || removingId === agent.id}
                       >
                         {removingId === agent.id ? "Deleting..." : "Delete"}
