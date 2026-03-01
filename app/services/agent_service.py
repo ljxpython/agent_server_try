@@ -43,7 +43,12 @@ async def list_agents_for_project_id(
         project = get_project(session, project_uuid)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_membership(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_membership(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         agents, total = list_agents_for_project(
             session,
             project_id=project_uuid,
@@ -86,7 +91,12 @@ async def create_agent_for_project(
         project = get_project(session, project_uuid)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         agent = create_agent(
             session,
             project_id=project.id,
@@ -126,7 +136,12 @@ async def delete_agent_by_id(request: Request, agent_id: str) -> dict[str, Any]:
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         await remove_agent_fga(request, agent_id=str(agent.id), project_id=str(project.id))
         delete_agent(session, agent)
         return {"deleted": True, "agent_id": str(agent_uuid)}
@@ -153,7 +168,12 @@ async def update_agent_by_id(
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         updated = update_agent(
             session,
             agent=agent,

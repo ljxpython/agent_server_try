@@ -37,7 +37,12 @@ async def add_membership_to_tenant(
 
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_ref)
-        require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
 
         target_user = None
         target_uuid = parse_uuid(user_id or "") if user_id else None
@@ -85,7 +90,12 @@ async def remove_membership_from_tenant(request: Request, tenant_ref: str, user_
 
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_ref)
-        require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
 
         target_user = None
         user_uuid = parse_uuid(user_ref)

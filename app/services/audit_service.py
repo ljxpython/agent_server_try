@@ -38,7 +38,12 @@ async def query_tenant_audit_logs_data(
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_ref)
-        require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
 
         rows, total = list_audit_logs(
             session,
@@ -91,7 +96,12 @@ async def query_tenant_audit_stats_data(
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_ref)
-        require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         rows = aggregate_audit_logs(
             session,
             tenant_id=tenant.id,
@@ -126,7 +136,12 @@ async def export_tenant_audit_logs_csv(
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_ref)
-        require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
 
         rows, _ = list_audit_logs(
             session,

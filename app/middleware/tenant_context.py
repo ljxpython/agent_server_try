@@ -134,33 +134,43 @@ def register_tenant_context_middleware(app: FastAPI, settings: Settings) -> None
                             },
                         )
 
-                    membership = get_membership(session, tenant.id, user.id)
-                    if membership is None:
+                    if settings.dev_auth_bypass_enabled and settings.dev_auth_bypass_membership_enabled:
+                        membership_role = settings.dev_auth_bypass_role
                         logger.warning(
-                            "tenant_membership_missing request_id=%s tenant_id=%s user_id=%s",
+                            "tenant_membership_bypassed request_id=%s tenant_id=%s user_id=%s role=%s",
                             getattr(request.state, "request_id", "-"),
                             resolved_tenant_id,
                             user.id,
+                            membership_role,
                         )
-                        return JSONResponse(
-                            status_code=403,
-                            content={
-                                "error": "tenant_access_denied",
-                                "message": "Tenant membership not found",
-                            },
-                            headers={
-                                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-                                "Vary": "Origin",
-                            },
+                    else:
+                        membership = get_membership(session, tenant.id, user.id)
+                        if membership is None:
+                            logger.warning(
+                                "tenant_membership_missing request_id=%s tenant_id=%s user_id=%s",
+                                getattr(request.state, "request_id", "-"),
+                                resolved_tenant_id,
+                                user.id,
+                            )
+                            return JSONResponse(
+                                status_code=403,
+                                content={
+                                    "error": "tenant_access_denied",
+                                    "message": "Tenant membership not found",
+                                },
+                                headers={
+                                    "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                                    "Vary": "Origin",
+                                },
+                            )
+                        membership_role = membership.role
+                        logger.info(
+                            "tenant_membership_ok request_id=%s tenant_id=%s user_id=%s role=%s",
+                            getattr(request.state, "request_id", "-"),
+                            resolved_tenant_id,
+                            user.id,
+                            membership_role,
                         )
-                    membership_role = membership.role
-                    logger.info(
-                        "tenant_membership_ok request_id=%s tenant_id=%s user_id=%s role=%s",
-                        getattr(request.state, "request_id", "-"),
-                        resolved_tenant_id,
-                        user.id,
-                        membership_role,
-                    )
 
                 if user is not None:
                     user_id = str(user.id)

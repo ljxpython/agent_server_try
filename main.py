@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from app.api.platform import router as platform_router
 from app.auth.keycloak import KeycloakSettings, KeycloakVerifier
 from app.auth.openfga import OpenFgaClient, OpenFgaSettings
-from app.config import Settings, load_settings
+from app.config import load_settings
 from app.db.access import create_audit_log, parse_uuid
 from app.db.init_db import create_core_tables
 from app.db.session import build_engine, build_session_factory, session_scope
@@ -58,6 +58,8 @@ def _to_int(value: str | None) -> int | None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    app.state.settings = settings
+
     timeout = httpx.Timeout(
         connect=5.0,
         read=settings.proxy_timeout_seconds,
@@ -90,6 +92,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         app.state.keycloak_verifier = None
         logger.info("startup_keycloak_disabled")
+
+    if settings.dev_auth_bypass_enabled:
+        logger.warning(
+            "startup_dev_auth_bypass_enabled mode=%s role=%s membership_bypass=%s",
+            settings.dev_auth_bypass_mode,
+            settings.dev_auth_bypass_role,
+            settings.dev_auth_bypass_membership_enabled,
+        )
 
     if settings.openfga_enabled:
         app.state.openfga_client = OpenFgaClient(
@@ -137,9 +147,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="LangGraph Transparent Proxy",
     version="0.1.0",
-    docs_url=None,
-    redoc_url=None,
-    openapi_url=None,
+    docs_url="/docs" if settings.api_docs_enabled else None,
+    redoc_url="/redoc" if settings.api_docs_enabled else None,
+    openapi_url="/openapi.json" if settings.api_docs_enabled else None,
     lifespan=lifespan,
 )
 app.include_router(platform_router)

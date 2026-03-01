@@ -41,7 +41,12 @@ async def list_agent_bindings_by_agent_id(
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_membership(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_membership(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         bindings, total = list_runtime_bindings(
             session,
             agent_id=agent_uuid,
@@ -87,7 +92,12 @@ async def upsert_agent_binding_by_agent_id(
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         binding = create_or_update_runtime_binding(
             session,
             agent_id=agent.id,
@@ -123,7 +133,12 @@ async def delete_runtime_binding_by_id(request: Request, agent_id: str, binding_
         project = get_project(session, agent.project_id)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
 
         binding = get_runtime_binding(session, binding_uuid)
         if binding is None or binding.agent_id != agent.id:

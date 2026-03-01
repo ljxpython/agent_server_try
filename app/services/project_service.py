@@ -39,7 +39,12 @@ async def list_projects_for_tenant_ref(
 
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_ref)
-        require_tenant_membership(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_membership(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         projects, total = list_projects_for_tenant(
             session,
             tenant_id=tenant.id,
@@ -59,7 +64,12 @@ async def create_project_for_tenant(request: Request, tenant_id: str, name: str)
     session_factory = db_session_factory_from_request(request)
     with session_scope(session_factory) as session:
         tenant = resolve_tenant_or_404(session, tenant_id)
-        require_tenant_admin(session, tenant_id=tenant.id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         project = create_project(session, tenant_id=tenant.id, name=name)
         client = openfga_client_from_request(request)
         if client is not None:
@@ -82,7 +92,12 @@ async def delete_project_by_id(request: Request, project_id: str) -> dict[str, A
         project = get_project(session, project_uuid)
         if project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        require_tenant_admin(session, tenant_id=project.tenant_id, acting_user_id=acting_user_id)
+        require_tenant_admin(
+            session,
+            tenant_id=project.tenant_id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
         agents = list_agents_for_tenant(session, tenant_id=project.tenant_id)
         for agent in agents:
             if agent.project_id == project.id:
