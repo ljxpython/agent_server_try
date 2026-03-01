@@ -129,7 +129,7 @@
   - service 层承载核心业务流程。
   - 回归测试通过，接口行为不变。
 
-状态：进行中（第二轮已完成）。
+状态：已完成。
 
 本轮落地：
 - 新增 `app/services/platform_service.py`，承接 tenant/membership/project/agent/runtime-binding/audit 业务流程。
@@ -140,6 +140,8 @@
 - `app/services` 已按领域拆分：`platform_common/tenant/membership/project/agent/binding/audit`。
 - `app/services/platform_service.py` 保留兼容导出，避免 API 层改动扩大。
 - 新增契约回归测试：`tests/test_platform_api_contract.py`（分页头、CSV 导出契约、审计响应结构）。
+- 尾项补齐：新增 400/403/404 错误契约测试，确认错误状态码与 `detail` 文案稳定。
+- 验证结果：`PYTHONPATH=. uv run pytest -q`（6 passed），`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）。
 
 ### Step 4
 

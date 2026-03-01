@@ -2,7 +2,7 @@
 
 ## 当前焦点
 
-前后端收尾开发（Step 2 已完成，Step 3 第二轮已落地）
+前后端收尾开发（Step 3 已完成，准备进入 Step 4）
 
 ## 总体进度
 
@@ -93,8 +93,8 @@
 
 ## 下一步
 
-1. Step 3：完成尾项收敛（按模块补齐最小单测与结构文档同步）。
-2. Step 4：补齐前端平台页写操作闭环与回归用例。
+1. Step 4：补齐前端平台页写操作闭环与回归用例。
+2. 扩展前后端 E2E 回归覆盖写路径与权限拒绝场景。
 
 ## Step 3 本轮完成项
 
@@ -107,6 +107,8 @@
 7. `app/services/platform_service.py` 改为兼容导出层，API 路由调用保持不变。
 8. 新增契约回归测试：`tests/test_platform_api_contract.py`。
 9. 新一轮验证通过：`PYTHONPATH=. uv run pytest -q`（3 passed）、`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）。
+10. 已补齐 Step 3 尾项：新增 400/403/404 契约断言，验证错误码与 `detail` 文案稳定。
+11. 尾项验证通过：`PYTHONPATH=. uv run pytest -q`（6 passed）、`PYTHONPATH=. uv run python scripts/smoke_e2e.py`（PASS）。
 
 ## 步骤执行规则
 

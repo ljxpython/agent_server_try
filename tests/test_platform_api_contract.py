@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fastapi import HTTPException
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -81,3 +82,49 @@ def test_query_audit_logs_response_shape(monkeypatch):
     data = resp.json()
     assert data["total"] == 1
     assert data["items"][0]["path"] == "/_platform/tenants"
+
+
+def test_delete_agent_404_contract(monkeypatch):
+    async def fake_delete_agent(*args, **kwargs):
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    monkeypatch.setattr("app.api.platform.delete_agent_by_id", fake_delete_agent)
+
+    with _build_client() as client:
+        resp = client.delete("/_platform/agents/a1")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Agent not found"
+
+
+def test_delete_project_400_contract(monkeypatch):
+    async def fake_delete_project(*args, **kwargs):
+        raise HTTPException(status_code=400, detail="Invalid project_id")
+
+    monkeypatch.setattr("app.api.platform.delete_project_by_id", fake_delete_project)
+
+    with _build_client() as client:
+        resp = client.delete("/_platform/projects/bad-project")
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "Invalid project_id"
+
+
+def test_create_agent_403_contract(monkeypatch):
+    async def fake_create_agent(*args, **kwargs):
+        raise HTTPException(status_code=403, detail="Only owner/admin can perform this action")
+
+    monkeypatch.setattr("app.api.platform.create_agent_for_project", fake_create_agent)
+
+    payload = {
+        "project_id": "p1",
+        "name": "agent-a",
+        "graph_id": "graph-a",
+        "runtime_base_url": "http://runtime.local",
+        "description": "",
+    }
+    with _build_client() as client:
+        resp = client.post("/_platform/agents", json=payload)
+
+    assert resp.status_code == 403
+    assert resp.json()["detail"] == "Only owner/admin can perform this action"
