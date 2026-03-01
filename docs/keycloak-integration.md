@@ -255,6 +255,12 @@ KEYCLOAK_ISSUER=http://127.0.0.1:18080/realms/agent-platform
 
 > 兼容说明：原 `/api/keycloak-token` 自动模式仍可保留作本地兜底，但推荐默认使用 OIDC 浏览器登录流。
 
+### Chat CORS 快速规则（本地）
+
+- 浏览器端 Chat 请求建议走 `http://localhost:2024`（或同源 `/api` 代理）。
+- 不要让浏览器直接请求 `http://127.0.0.1:8123`，否则容易出现 `Access-Control-Allow-Origin` 与 `http://localhost:3000` 不一致。
+- 如果看到 `/threads/search` 或 `/info` CORS 报错，先检查 URL 参数 `apiUrl` 是否被写成了 `127.0.0.1:8123`。
+
 ## 重要：两条“必须重做”
 
 1. 你修改了 Keycloak 的 Audience Mapper 后，**必须重新获取一枚新 token**（旧 token 不会自动更新 `aud`）。
