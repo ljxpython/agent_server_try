@@ -42,6 +42,13 @@ OPENFGA_MODEL_ID=<model-id>
 OPENFGA_MODEL_FILE=config/openfga-models/v1.json
 ```
 
+## 开发环境与生产环境访问约定
+
+- 开发环境（推荐）：服务器仅开放 `22`，通过 SSH 隧道访问 OpenFGA。
+- 开发环境示例：`OPENFGA_URL=http://127.0.0.1:18081`（本机转发端口）。
+- 生产环境建议：OpenFGA 放在私有网络，`OPENFGA_URL` 使用内网地址；如必须对外访问，只通过受控入口暴露。
+- 详细网络边界与端口策略见：`docs/server-migration-guide.md`。
+
 ## 已接入逻辑
 
 - 创建租户/成员变更时，同步 tenant 角色 tuple（`owner/admin/member`）。

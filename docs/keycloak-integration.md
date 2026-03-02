@@ -320,3 +320,11 @@ docker ps --format "table {{.Names}}\t{{.Ports}}"
 ```
 
 保持 Keycloak 在 `18080` 即可规避。
+
+## 开发环境与生产环境访问约定
+
+- 开发环境（推荐）：服务器仅开放 `22`，通过 SSH 隧道访问 Keycloak。
+- 开发环境示例：`KEYCLOAK_ISSUER=http://127.0.0.1:18080/realms/agent-platform`（本机转发端口）。
+- 生产环境建议：Keycloak 优先走内网与统一反向代理，对外访问按需开放并强制 TLS。
+- 生产环境不要直接公网暴露 PostgreSQL；数据库只保留私网访问。
+- 详细网络边界与端口策略见：`docs/server-migration-guide.md`。

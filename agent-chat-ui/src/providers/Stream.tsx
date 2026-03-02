@@ -151,6 +151,22 @@ const StreamSession = ({
     return runtimeHeaders;
   }, [apiKey, runtimeHeaders, autoTokenEnabled]);
 
+  const statusHeaders = useMemo<Record<string, string>>(() => {
+    if (isJwtToken(apiKey)) {
+      return {
+        Authorization: `Bearer ${apiKey}`,
+      };
+    }
+
+    if (apiKey && !autoTokenEnabled) {
+      return {
+        "X-Api-Key": apiKey,
+      };
+    }
+
+    return {};
+  }, [apiKey, autoTokenEnabled]);
+
   const streamApiKey = isJwtToken(apiKey) ? undefined : apiKey ?? undefined;
 
   const streamValue = useTypedStream({
@@ -198,7 +214,7 @@ const StreamSession = ({
   });
 
   useEffect(() => {
-    checkGraphStatus(apiUrl, authHeaders).then((ok) => {
+    checkGraphStatus(apiUrl, statusHeaders).then((ok) => {
       if (!ok) {
         logClient({
           level: "warn",
@@ -222,7 +238,7 @@ const StreamSession = ({
         });
       }
     });
-  }, [apiUrl, assistantId, authHeaders]);
+  }, [apiUrl, assistantId, statusHeaders]);
 
   return (
     <StreamContext.Provider value={streamValue}>
@@ -263,8 +279,10 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
     defaultValue: envAssistantId || "",
   });
 
-  // For API key, use localStorage with env var fallback
   const [apiKey, _setApiKey] = useState(() => {
+    if (autoTokenEnabled) {
+      return "";
+    }
     const storedKey = getApiKey();
     return storedKey || "";
   });
@@ -395,6 +413,14 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
           level: "info",
           event: "stream_auto_token_loaded",
           message: "Loaded token in auto mode",
+        });
+      } else {
+        window.localStorage.removeItem("lg:chat:apiKey");
+        _setApiKey("");
+        logClient({
+          level: "warn",
+          event: "stream_auto_token_missing",
+          message: "Auto token unavailable; cleared cached api key",
         });
       }
 

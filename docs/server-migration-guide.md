@@ -125,6 +125,78 @@ uv run alembic upgrade head
 - 生产建议 OpenFGA 使用 PostgreSQL datastore（避免内存/临时存储）
 - 确保 OpenFGA 服务可达
 
+## 开发环境与生产环境网络边界（必须明确）
+
+### 端口公开策略
+
+- 开发环境（远程服务器联调）：公网只开放 `22`（SSH）。
+- 开发环境（远程服务器联调）：`18080`（Keycloak）、`18081`（OpenFGA）、`5432`（PostgreSQL）、`11434`（Ollama）不对公网开放，仅允许 `127.0.0.1` 或内网访问。
+- 生产环境：`5432`（PostgreSQL）与 `11434`（Ollama）不对公网开放。
+- 生产环境：`18080`/`18081` 默认也不对公网开放，如确需外部访问，只通过统一 Ingress/反向代理暴露 Keycloak/OpenFGA，并配 TLS 与访问控制。
+
+### 开发环境推荐模式：只开 SSH + 本地端口转发
+
+在本机建立一次性多端口 SSH 隧道：
+
+```bash
+ssh -N \
+  -L 18080:127.0.0.1:18080 \
+  -L 18081:127.0.0.1:18081 \
+  -L 5432:127.0.0.1:5432 \
+  -L 11434:127.0.0.1:11434 \
+  <user>@<server>
+```
+
+使用方式：
+
+- 本机访问 `http://127.0.0.1:18080` 等价访问服务器 Keycloak。
+- 本机访问 `http://127.0.0.1:18081` 等价访问服务器 OpenFGA。
+- 本机连接 `127.0.0.1:5432` 等价连接服务器 PostgreSQL。
+- 本机访问 `http://127.0.0.1:11434` 等价访问服务器 Ollama。
+
+停止隧道：
+
+- 前台运行时，直接 `Ctrl+C`。
+- 后台运行时，结束对应 `ssh -N` 进程。
+
+### 如何区分开发环境/预发环境/生产环境（使用现有模板）
+
+固定使用环境模板，不在同一个 `.env` 上反复手改：
+
+- `config/environments/.env.dev.example`
+- `config/environments/.env.dev.tunnel.example`
+- `config/environments/.env.staging.example`
+- `config/environments/.env.prod.example`
+
+建议流程：
+
+1. 开发环境：
+   - 本地单机调试可从 `.env.dev.example` 复制。
+   - 远程基础设施联调（SSH 隧道）建议从 `.env.dev.tunnel.example` 复制。
+2. 预发环境：从 `.env.staging.example` 复制，使用预发域名或内网地址。
+3. 生产环境：从 `.env.prod.example` 复制，使用生产域名或私网地址。
+
+关键变量示例：
+
+```env
+# 开发环境（SSH 隧道）
+KEYCLOAK_ISSUER=http://127.0.0.1:28080/realms/agent-platform
+OPENFGA_URL=http://127.0.0.1:28081
+
+# 生产环境（示例）
+KEYCLOAK_ISSUER=https://<auth-domain>/realms/agent-platform
+OPENFGA_URL=http://openfga.internal:8080
+```
+
+### 环境选择与上线前快速检查清单
+
+- [ ] 当前 `.env` 来源模板正确（dev/staging/prod 之一）。
+- [ ] 开发环境仅开放 `22`，业务端口通过 SSH 隧道访问。
+- [ ] 生产环境未公网暴露 PostgreSQL `5432` 与 Ollama `11434`。
+- [ ] `KEYCLOAK_ISSUER` 与目标环境一致（开发为本机转发，生产为正式域名）。
+- [ ] `OPENFGA_URL` 与目标环境一致（开发为本机转发，生产为私网或受控入口）。
+- [ ] 服务重启后，`/_proxy/health` 与鉴权冒烟验证通过。
+
 ---
 
 ## 第 3 步：迁移 OpenFGA 数据（模型 + tuple）
@@ -239,3 +311,77 @@ OPENFGA_MODEL_FILE=config/openfga-models/v1.json
 4. `.env.server.template` 只改主机与密钥，不改业务标识
 
 否则就会出现“服务起来了但权限不对/用户失效/数据不一致”的情况。
+
+---
+
+## 本次实战经验记录（2026-03）
+
+### 1) 端口与网络边界
+
+- 远程服务器已落地为 localhost 绑定：`127.0.0.1:18080/18081/5432/11434`。
+- 验证方式：`docker ps` + `ss -lntp` 双重确认，避免“容器配置改了但监听还在公网”。
+- 对外探测验证：从服务器本机对公网 IP 探测 `18080/18081/5432/11434` 均应 `closed`。
+
+### 2) 本地开发连接方式（推荐固定）
+
+- 使用单条 SSH 隧道命令统一转发：
+
+```bash
+ssh -p 10526 -N \
+  -L 28080:127.0.0.1:18080 \
+  -L 28081:127.0.0.1:18081 \
+  -L 15432:127.0.0.1:5432 \
+  -L 11143:127.0.0.1:11434 \
+  root@61.147.247.83
+```
+
+- 说明：本地若已占用 `18080/18081`，建议使用 `28080/28081`，避免和本机现有服务冲突。
+
+可选一键脚本（在仓库根目录执行）：
+
+```bash
+bash scripts/dev_tunnel_up.sh
+bash scripts/dev_tunnel_down.sh
+```
+
+或使用 Makefile：
+
+```bash
+make dev-up
+make dev-down
+```
+
+### 3) 本地后端联调关键配置
+
+- `DATABASE_URL=postgresql+psycopg://agent:<pwd>@127.0.0.1:15432/agent_platform`
+- `KEYCLOAK_ISSUER=http://127.0.0.1:28080/realms/agent-platform`
+- `OPENFGA_URL=http://127.0.0.1:28081`
+- `OPENFGA_STORE_ID` / `OPENFGA_MODEL_ID` 必须与远端现网一致。
+
+### 4) 验收顺序（先连通，再鉴权，再授权）
+
+1. `curl http://127.0.0.1:2024/_proxy/health` => `200`
+2. `curl http://127.0.0.1:2024/info`（无 token）=> `401`
+3. 从 Keycloak 取 token 后请求 `/info` => `200`
+4. OpenFGA `check`：member `can_read=true`、`can_write=false`
+
+### 5) 常见坑
+
+- 只改了 `.env` 但没重启后端，配置不会生效。
+- `DEV_AUTH_BYPASS_ENABLED=true` 会掩盖真实鉴权问题，联调阶段应关闭。
+- `OPENFGA_AUTHZ_ENABLED=false` 会让授权失效，验权前必须打开。
+
+### 6) 重启后 30 秒自检
+
+```bash
+curl -sS -o /dev/null -w 'health:%{http_code}\n' http://127.0.0.1:2024/_proxy/health
+curl -sS -o /dev/null -w 'openfga:%{http_code}\n' http://127.0.0.1:28081/healthz
+TOKEN=$(curl -sS -X POST 'http://127.0.0.1:28080/realms/agent-platform/protocol/openid-connect/token' \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'grant_type=password' -d 'client_id=agent-proxy' \
+  -d 'username=demo_user' -d 'password=Demo@123456' | \
+  python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")
+curl -sS -o /dev/null -w 'info_with_token:%{http_code}\n' -H "Authorization: Bearer $TOKEN" http://127.0.0.1:2024/info
+```
+
+预期输出：`health:200`、`openfga:200`、`info_with_token:200`。

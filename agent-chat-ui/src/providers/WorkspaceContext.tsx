@@ -46,7 +46,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setTenants(rows);
 
-        if (!tenantId && rows.length > 0) {
+        const tenantStillValid = rows.some((item) => item.id === tenantId);
+        if ((!tenantId || !tenantStillValid) && rows.length > 0) {
           setTenantId(rows[0].id);
         }
       } catch {
@@ -76,7 +77,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function loadProjects() {
-      if (!tenantId) {
+      if (!tenantId || tenants.length === 0) {
+        setProjects([]);
+        setProjectId("");
+        return;
+      }
+
+      const tenantStillValid = tenants.some((item) => item.id === tenantId);
+      if (!tenantStillValid) {
+        setTenantId(tenants[0].id);
         setProjects([]);
         setProjectId("");
         return;
@@ -88,8 +97,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setProjects(rows);
 
-        if (!projectId && rows.length > 0) {
+        const projectStillValid = rows.some((item) => item.id === projectId);
+        if ((!projectId || !projectStillValid) && rows.length > 0) {
           setProjectId(rows[0].id);
+        }
+        if (rows.length === 0) {
+          setProjectId("");
         }
       } catch {
         if (!cancelled) {
@@ -115,7 +128,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [projectId, setProjectId, tenantId]);
+  }, [projectId, setProjectId, setTenantId, tenantId, tenants]);
 
   const value = useMemo<WorkspaceContextValue>(
     () => ({
