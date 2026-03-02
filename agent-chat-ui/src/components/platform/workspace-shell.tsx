@@ -22,7 +22,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
   const query = searchParams.toString();
 
   return (
-    <div className="bg-background text-foreground min-h-screen">
+    <div className="bg-background text-foreground flex min-h-dvh flex-col">
       <header className="bg-background/95 sticky top-0 z-20 border-b border-border/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
         <div className="mx-auto flex max-w-[1400px] flex-col gap-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -58,7 +58,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px]">{children}</main>
+      <main className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1">{children}</main>
     </div>
   );
 }

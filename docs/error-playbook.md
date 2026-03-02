@@ -102,7 +102,19 @@
   - `ThreadProvider` 在自动模式下忽略非 JWT 的本地缓存 key。
 - 验证：
   - `/info` 不再出现 `Invalid payload padding`。
-  - `/threads/search` 与运行时请求保持 200（或明确的权限状态码）。
+- `/threads/search` 与运行时请求保持 200（或明确的权限状态码）。
+
+### 13) Chat 页面滚动后只显示半屏，且必须滚到底才能恢复
+
+- 现象：鼠标持续上滚后，聊天区只显示半屏；回滚时仍卡住，必须把消息拖到最底才恢复。
+- 根因：外层页面滚动与消息内层滚动竞争（`h-screen` + sticky header + 内层 `overflow-y-scroll`），导致滚动焦点和可视高度计算错位。
+- 修复：
+  - `WorkspaceShell` 改为纵向 `flex` 容器，`main` 使用 `flex-1 min-h-0` 承载页面。
+  - `Thread` 根容器使用 `flex-1 min-h-0 overflow-hidden`，不再使用 `h-screen`。
+  - 保持消息列表为唯一主滚动区，避免窗口滚动接管。
+- 验证：
+  - 在 chat 页面连续上滚/下滚，聊天区不再出现半屏卡住。
+  - 无需先滚到底即可正常回滚查看历史消息。
 
 ## 快速排查顺序（推荐）
 

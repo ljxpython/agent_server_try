@@ -247,7 +247,7 @@ export function Thread() {
     : { type: "spring" as const, stiffness: 300, damping: 30 };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden">
+    <div className="flex min-h-0 w-full flex-1 overflow-hidden">
       <div className="relative hidden lg:flex">
         <motion.div
           className="absolute z-20 h-full overflow-hidden border-r bg-white"
