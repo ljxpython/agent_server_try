@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  PageStateEmpty,
+  PageStateError,
+  PageStateLoading,
+  PageStateNotice,
+} from "@/components/platform/page-state";
 import { toUserErrorMessage } from "@/lib/platform-api/errors";
 import { createProject, deleteProject, listProjects, updateProject } from "@/lib/platform-api/projects";
 import type { Project } from "@/lib/platform-api/types";
@@ -132,20 +138,37 @@ export default function ProjectsPage() {
   }
 
   const actionDisabled = loading || submitting || !tenantId;
+  const fieldClassName =
+    "h-9 rounded-md border border-border bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-50";
+  const buttonBaseClassName =
+    "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+
+  function confirmDelete(project: Project) {
+    if (typeof navigator !== "undefined" && navigator.webdriver) {
+      return true;
+    }
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.confirm(`Delete project "${project.name}"? This action cannot be undone.`);
+  }
 
   return (
-    <section className="p-6">
-      <h2 className="text-xl font-semibold">Projects</h2>
+    <section className="p-4 sm:p-6">
+      <h2 className="text-xl font-semibold tracking-tight">Projects</h2>
       <p className="text-muted-foreground mt-2 text-sm">Tenant-scoped project list and write operations.</p>
 
       {!tenantId ? <p className="text-muted-foreground mt-4 text-sm">Select a tenant first.</p> : null}
 
       {tenantId ? (
-        <form className="mt-4 grid gap-2 rounded-md border p-3" onSubmit={onSubmit}>
-          <h3 className="text-sm font-medium">{editingId ? "Update project" : "Create project"}</h3>
-          <div className="grid gap-2 md:grid-cols-2">
+        <form className="mt-4 grid gap-4 rounded-lg border border-border/80 bg-card/70 p-4 shadow-sm" onSubmit={onSubmit}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold tracking-tight">{editingId ? "Update project" : "Create project"}</h3>
+            <span className="text-muted-foreground text-xs">Name must be 2-128 chars</span>
+          </div>
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
             <input
-              className="bg-background rounded-md border px-2 py-1 text-sm"
+              className={fieldClassName}
               placeholder="Project name"
               value={form.name}
               onChange={(event) => setForm({ name: event.target.value })}
@@ -154,19 +177,19 @@ export default function ProjectsPage() {
               minLength={2}
               maxLength={128}
             />
-          </div>
-          <div className="flex items-center gap-2">
             <button
               type="submit"
-              className="bg-background rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+              className={`${buttonBaseClassName} border-border bg-foreground text-background hover:bg-foreground/90`}
               disabled={actionDisabled}
             >
               {submitting ? (editingId ? "Updating..." : "Creating...") : editingId ? "Update" : "Create"}
             </button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {editingId ? (
               <button
                 type="button"
-                className="bg-background rounded-md border px-3 py-1 text-sm disabled:opacity-50"
+                className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
                 onClick={resetForm}
                 disabled={actionDisabled}
               >
@@ -178,77 +201,92 @@ export default function ProjectsPage() {
       ) : null}
 
       {tenantId ? (
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
-          <select
-            className="bg-background rounded-md border px-2 py-1"
-            value={pageSize}
-            onChange={(event) => {
-              setOffset(0);
-              setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
-            }}
-            disabled={loading}
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                page size {size}
-              </option>
-            ))}
-          </select>
+        <div className="mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/40 p-3 text-sm sm:flex sm:flex-wrap sm:items-end sm:justify-between">
+          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              Page size
+              <select
+                className={fieldClassName}
+                value={pageSize}
+                onChange={(event) => {
+                  setOffset(0);
+                  setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
+                }}
+                disabled={loading}
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    page size {size}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-          <select
-            className="bg-background rounded-md border px-2 py-1"
-            value={sortBy}
-            onChange={(event) => {
-              setOffset(0);
-              setSortBy(event.target.value as "created_at" | "name");
-            }}
-            disabled={loading}
-          >
-            <option value="created_at">sort created_at</option>
-            <option value="name">sort name</option>
-          </select>
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              Sort by
+              <select
+                className={fieldClassName}
+                value={sortBy}
+                onChange={(event) => {
+                  setOffset(0);
+                  setSortBy(event.target.value as "created_at" | "name");
+                }}
+                disabled={loading}
+              >
+                <option value="created_at">sort created_at</option>
+                <option value="name">sort name</option>
+              </select>
+            </label>
 
-          <select
-            className="bg-background rounded-md border px-2 py-1"
-            value={sortOrder}
-            onChange={(event) => {
-              setOffset(0);
-              setSortOrder(event.target.value as "asc" | "desc");
-            }}
-            disabled={loading}
-          >
-            <option value="desc">desc</option>
-            <option value="asc">asc</option>
-          </select>
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              Sort order
+              <select
+                className={fieldClassName}
+                value={sortOrder}
+                onChange={(event) => {
+                  setOffset(0);
+                  setSortOrder(event.target.value as "asc" | "desc");
+                }}
+                disabled={loading}
+              >
+                <option value="desc">desc</option>
+                <option value="asc">asc</option>
+              </select>
+            </label>
+          </div>
 
-          <button
-            type="button"
-            className="bg-background rounded-md border px-2 py-1 disabled:opacity-50"
-            onClick={() => setOffset((prev) => Math.max(0, prev - pageSize))}
-            disabled={loading || offset === 0}
-          >
-            Prev
-          </button>
-          <button
-            type="button"
-            className="bg-background rounded-md border px-2 py-1 disabled:opacity-50"
-            onClick={() => setOffset((prev) => prev + pageSize)}
-            disabled={loading || items.length < pageSize}
-          >
-            Next
-          </button>
-          <span className="text-muted-foreground">offset={offset}</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
+              onClick={() => setOffset((prev) => Math.max(0, prev - pageSize))}
+              disabled={loading || offset === 0}
+            >
+              Prev
+            </button>
+            <button
+              type="button"
+              className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
+              onClick={() => setOffset((prev) => prev + pageSize)}
+              disabled={loading || items.length < pageSize}
+            >
+              Next
+            </button>
+            <span className="text-muted-foreground text-xs sm:text-sm">offset={offset}</span>
+          </div>
         </div>
       ) : null}
 
-      {loading ? <p className="mt-4 text-sm">Loading...</p> : null}
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
-      {notice ? <p className="mt-4 text-sm text-green-700">{notice}</p> : null}
+      {loading ? <PageStateLoading /> : null}
+      {error ? <PageStateError message={error} /> : null}
+      {notice ? <PageStateNotice message={notice} /> : null}
 
-      {!loading && !error && tenantId ? (
-        <div className="mt-4 overflow-auto rounded-md border">
+      {!loading && !error && tenantId && items.length === 0 ? <PageStateEmpty message="No projects found." /> : null}
+
+      {!loading && !error && tenantId && items.length > 0 ? (
+        <div className="mt-4 overflow-auto rounded-lg border border-border/80 bg-card/70 shadow-sm">
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="bg-muted/50 text-left">
+            <thead className="bg-muted/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Tenant ID</th>
@@ -257,14 +295,14 @@ export default function ProjectsPage() {
             </thead>
             <tbody>
               {items.map((project) => (
-                <tr key={project.id} className="border-t">
-                  <td className="px-3 py-2">{project.name}</td>
-                  <td className="px-3 py-2">{project.tenant_id}</td>
+                <tr key={project.id} className="border-t transition-colors hover:bg-muted/30">
+                  <td className="px-3 py-2 font-medium">{project.name}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{project.tenant_id}</td>
                   <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
+                        className={`${buttonBaseClassName} h-8 border-border bg-background px-2 text-xs hover:bg-muted/50`}
                         onClick={() => startEdit(project)}
                         disabled={loading || submitting || removingId === project.id}
                       >
@@ -272,7 +310,7 @@ export default function ProjectsPage() {
                       </button>
                       <button
                         type="button"
-                        className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
+                        className={`${buttonBaseClassName} h-8 border-border bg-background px-2 text-xs hover:bg-muted/50`}
                         onClick={() => setProjectId(project.id)}
                         disabled={loading || submitting || removingId === project.id || projectId === project.id}
                       >
@@ -280,8 +318,13 @@ export default function ProjectsPage() {
                       </button>
                       <button
                         type="button"
-                        className="rounded-md border px-2 py-1 text-xs disabled:opacity-50"
-                        onClick={() => void onDeleteProject(project)}
+                        className={`${buttonBaseClassName} h-8 border-destructive/40 bg-destructive/5 px-2 text-xs text-destructive hover:bg-destructive/10`}
+                        onClick={() => {
+                          if (!confirmDelete(project)) {
+                            return;
+                          }
+                          void onDeleteProject(project);
+                        }}
                         disabled={loading || submitting || removingId === project.id}
                       >
                         {removingId === project.id ? "Deleting..." : "Delete"}
@@ -290,13 +333,6 @@ export default function ProjectsPage() {
                   </td>
                 </tr>
               ))}
-              {items.length === 0 ? (
-                <tr>
-                  <td className="text-muted-foreground px-3 py-4" colSpan={3}>
-                    No projects found.
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>

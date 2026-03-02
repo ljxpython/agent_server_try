@@ -51,7 +51,6 @@ export function HumanMessage({
 
   const handleSubmitEdit = () => {
     setIsEditing(false);
-
     const newMessage: Message = { type: "human", content: value };
     thread.submit(
       { messages: [newMessage] },
@@ -63,7 +62,6 @@ export function HumanMessage({
         optimisticValues: (prev) => {
           const values = meta?.firstSeenState?.values;
           if (!values) return prev;
-
           return {
             ...values,
             messages: [...(values.messages ?? []), newMessage],
@@ -74,13 +72,8 @@ export function HumanMessage({
   };
 
   return (
-    <div
-      className={cn(
-        "group ml-auto flex items-center gap-2",
-        isEditing && "w-full max-w-xl",
-      )}
-    >
-      <div className={cn("flex flex-col gap-2", isEditing && "w-full")}>
+    <div className={cn("group ml-auto flex items-center gap-2", isEditing && "w-full max-w-xl")}>
+      <div className="flex flex-col gap-2">
         {isEditing ? (
           <EditableContent
             value={value}
@@ -117,10 +110,9 @@ export function HumanMessage({
             ) : null}
           </div>
         )}
-
         <div
           className={cn(
-            "ml-auto flex items-center gap-2 transition-opacity",
+            "mr-auto flex items-center gap-2 transition-opacity",
             "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
             isEditing && "opacity-100",
           )}

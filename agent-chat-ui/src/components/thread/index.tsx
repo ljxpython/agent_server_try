@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import { ReactNode, useEffect, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
 import { useState, FormEvent } from "react";
@@ -65,7 +65,6 @@ function StickyToBottomContent(props: {
       >
         {props.content}
       </div>
-
       {props.footer}
     </div>
   );
@@ -73,7 +72,6 @@ function StickyToBottomContent(props: {
 
 function ScrollToBottom(props: { className?: string }) {
   const { isAtBottom, scrollToBottom } = useStickToBottomContext();
-
   if (isAtBottom) return null;
   return (
     <Button
@@ -112,9 +110,9 @@ function OpenGitHubRepo() {
 }
 
 export function Thread() {
+  const prefersReducedMotion = useReducedMotion();
   const [artifactContext, setArtifactContext] = useArtifactContext();
   const [artifactOpen, closeArtifact] = useArtifactOpen();
-
   const [threadId, _setThreadId] = useQueryState("threadId");
   const [chatHistoryOpen, setChatHistoryOpen] = useQueryState(
     "chatHistoryOpen",
@@ -137,17 +135,13 @@ export function Thread() {
   } = useFileUpload();
   const [firstTokenReceived, setFirstTokenReceived] = useState(false);
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
-
   const stream = useStreamContext();
   const messages = stream.messages;
   const isLoading = stream.isLoading;
-
   const lastError = useRef<string | undefined>(undefined);
 
   const setThreadId = (id: string | null) => {
     _setThreadId(id);
-
-    // close artifact and reset artifact context
     closeArtifact();
     setArtifactContext({});
   };
@@ -160,11 +154,8 @@ export function Thread() {
     try {
       const message = (stream.error as any).message;
       if (!message || lastError.current === message) {
-        // Message has already been logged. do not modify ref, return early.
         return;
       }
-
-      // Message is defined, and it has not been logged yet. Save it, and send the error
       lastError.current = message;
       toast.error("An error occurred. Please try again.", {
         description: (
@@ -190,7 +181,6 @@ export function Thread() {
     ) {
       setFirstTokenReceived(true);
     }
-
     prevMessageLength.current = messages.length;
   }, [messages]);
 
@@ -199,7 +189,6 @@ export function Thread() {
     if ((input.trim().length === 0 && contentBlocks.length === 0) || isLoading)
       return;
     setFirstTokenReceived(false);
-
     const newHumanMessage: Message = {
       id: uuidv4(),
       type: "human",
@@ -208,12 +197,9 @@ export function Thread() {
         ...contentBlocks,
       ] as Message["content"],
     };
-
     const toolMessages = ensureToolCallsHaveResponses(stream.messages);
-
     const context =
       Object.keys(artifactContext).length > 0 ? artifactContext : undefined;
-
     stream.submit(
       { messages: [...toolMessages, newHumanMessage], context },
       {
@@ -231,7 +217,6 @@ export function Thread() {
         }),
       },
     );
-
     setInput("");
     setContentBlocks([]);
   };
@@ -239,7 +224,6 @@ export function Thread() {
   const handleRegenerate = (
     parentCheckpoint: Checkpoint | null | undefined,
   ) => {
-    // Do this so the loading state is correct
     prevMessageLength.current = prevMessageLength.current - 1;
     setFirstTokenReceived(false);
     stream.submit(undefined, {
@@ -254,6 +238,13 @@ export function Thread() {
   const hasNoAIOrToolMessages = !messages.find(
     (m) => m.type === "ai" || m.type === "tool",
   );
+  const shellSpringTransition =
+    !prefersReducedMotion && isLargeScreen
+      ? { type: "spring" as const, stiffness: 300, damping: 30 }
+      : { duration: 0 };
+  const logoSpringTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : { type: "spring" as const, stiffness: 300, damping: 30 };
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -261,17 +252,11 @@ export function Thread() {
         <motion.div
           className="absolute z-20 h-full overflow-hidden border-r bg-white"
           style={{ width: 300 }}
-          animate={
-            isLargeScreen
-              ? { x: chatHistoryOpen ? 0 : -300 }
-              : { x: chatHistoryOpen ? 0 : -300 }
-          }
+          animate={{
+            x: chatHistoryOpen ? 0 : -300,
+          }}
           initial={{ x: -300 }}
-          transition={
-            isLargeScreen
-              ? { type: "spring", stiffness: 300, damping: 30 }
-              : { duration: 0 }
-          }
+          transition={shellSpringTransition}
         >
           <div
             className="relative h-full"
@@ -284,7 +269,7 @@ export function Thread() {
 
       <div
         className={cn(
-          "grid w-full grid-cols-[1fr_0fr] transition-all duration-500",
+          "grid w-full grid-cols-[1fr_0fr] transition-all motion-standard",
           artifactOpen && "grid-cols-[3fr_2fr]",
         )}
       >
@@ -293,7 +278,7 @@ export function Thread() {
             "relative flex min-w-0 flex-1 flex-col overflow-hidden",
             !chatStarted && "grid-rows-[1fr]",
           )}
-          layout={isLargeScreen}
+          layout={isLargeScreen && !prefersReducedMotion}
           animate={{
             marginLeft: chatHistoryOpen ? (isLargeScreen ? 300 : 0) : 0,
             width: chatHistoryOpen
@@ -302,11 +287,7 @@ export function Thread() {
                 : "100%"
               : "100%",
           }}
-          transition={
-            isLargeScreen
-              ? { type: "spring", stiffness: 300, damping: 30 }
-              : { duration: 0 }
-          }
+          transition={shellSpringTransition}
         >
           {!chatStarted && (
             <div className="absolute top-0 left-0 z-10 flex w-full items-center justify-between gap-3 p-2 pl-4">
@@ -354,11 +335,7 @@ export function Thread() {
                   animate={{
                     marginLeft: !chatHistoryOpen ? 48 : 0,
                   }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 300,
-                    damping: 30,
-                  }}
+                  transition={logoSpringTransition}
                 >
                   <LangGraphLogoSVG
                     width={32}
@@ -384,8 +361,6 @@ export function Thread() {
                   <SquarePen className="size-5" />
                 </TooltipIconButton>
               </div>
-
-              <div className="from-background to-background/0 absolute inset-x-0 top-full h-5 bg-gradient-to-b" />
             </div>
           )}
 
@@ -448,7 +423,7 @@ export function Thread() {
                   <div
                     ref={dropRef}
                     className={cn(
-                      "bg-muted relative z-10 mx-auto mb-8 w-full max-w-3xl rounded-2xl shadow-xs transition-all",
+                      "bg-white relative z-10 mx-auto mb-8 w-full max-w-3xl rounded-2xl shadow-xs transition-all motion-micro",
                       dragOver
                         ? "border-primary border-2 border-dotted"
                         : "border border-solid",
@@ -482,7 +457,6 @@ export function Thread() {
                         placeholder="Type your message..."
                         className="field-sizing-content resize-none border-none bg-transparent p-3.5 pb-0 shadow-none ring-0 outline-none focus:ring-0 focus:outline-none"
                       />
-
                       <div className="flex items-center gap-6 p-2 pt-4">
                         <div>
                           <div className="flex items-center space-x-2">
@@ -528,7 +502,7 @@ export function Thread() {
                         ) : (
                           <Button
                             type="submit"
-                            className="ml-auto shadow-md transition-all"
+                            className="ml-auto shadow-md transition-all motion-micro"
                             disabled={
                               isLoading ||
                               (!input.trim() && contentBlocks.length === 0)
@@ -545,7 +519,7 @@ export function Thread() {
             />
           </StickToBottom>
         </motion.div>
-        <div className="relative flex flex-col border-l">
+        <div className={cn("relative flex flex-col", artifactOpen && "border-l")}>
           <div className="absolute inset-0 flex min-w-[30vw] flex-col">
             <div className="grid grid-cols-[1fr_auto] border-b p-4">
               <ArtifactTitle className="truncate overflow-hidden" />

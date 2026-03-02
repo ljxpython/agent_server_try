@@ -47,7 +47,6 @@ function parseAnthropicStreamedToolCalls(
   content: MessageContentComplex[],
 ): AIMessage["tool_calls"] {
   const toolCallContents = content.filter((c) => c.type === "tool_use" && c.id);
-
   return toolCallContents.map((tc) => {
     const toolCall = tc as Record<string, any>;
     let json: Record<string, any> = {};
@@ -82,7 +81,6 @@ function Interrupt({
     ? (interrupt as Record<string, any>[])
     : (((interrupt as { value?: unknown } | undefined)?.value ??
         interrupt) as Record<string, any>);
-
   return (
     <>
       {isAgentInboxInterruptSchema(interrupt) &&
@@ -90,8 +88,8 @@ function Interrupt({
           <ThreadView interrupt={interrupt} />
         )}
       {interrupt &&
-      !isAgentInboxInterruptSchema(interrupt) &&
-      (isLastMessage || hasNoAIOrToolMessages) ? (
+        !isAgentInboxInterruptSchema(interrupt) &&
+        (isLastMessage || hasNoAIOrToolMessages) ? (
         <GenericInterruptView interrupt={fallbackValue} />
       ) : null}
     </>
@@ -122,12 +120,10 @@ export function AssistantMessage({
   );
   const meta = message ? thread.getMessagesMetadata(message) : undefined;
   const threadInterrupt = thread.interrupt;
-
   const parentCheckpoint = meta?.firstSeenState?.parent_checkpoint;
   const anthropicStreamedToolCalls = Array.isArray(content)
     ? parseAnthropicStreamedToolCalls(content)
     : undefined;
-
   const hasToolCalls =
     message &&
     "tool_calls" in message &&
@@ -135,7 +131,7 @@ export function AssistantMessage({
     message.tool_calls.length > 0;
   const toolCallsHaveContents =
     hasToolCalls &&
-    message.tool_calls?.some(
+    message.tool_calls.some(
       (tc) => tc.args && Object.keys(tc.args).length > 0,
     );
   const hasAnthropicToolCalls = !!anthropicStreamedToolCalls?.length;
@@ -164,7 +160,6 @@ export function AssistantMessage({
                 <MarkdownText>{contentString}</MarkdownText>
               </div>
             )}
-
             {!hideToolCalls && (
               <>
                 {(hasToolCalls && toolCallsHaveContents && (
@@ -178,7 +173,6 @@ export function AssistantMessage({
                   ))}
               </>
             )}
-
             {message && (
               <CustomComponent
                 message={message}
@@ -192,7 +186,7 @@ export function AssistantMessage({
             />
             <div
               className={cn(
-                "mr-auto flex items-center gap-2 transition-opacity",
+                "ml-auto flex items-center gap-2 transition-opacity",
                 "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
               )}
             >

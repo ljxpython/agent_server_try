@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { PageStateEmpty, PageStateError, PageStateLoading } from "@/components/platform/page-state";
 import { toUserErrorMessage } from "@/lib/platform-api/errors";
 import { queryTenantAuditStats } from "@/lib/platform-api/stats";
 import type { AuditStats } from "@/lib/platform-api/types";
@@ -78,10 +79,12 @@ export default function StatsPage() {
         </div>
       ) : null}
 
-      {loading ? <p className="mt-4 text-sm">Loading...</p> : null}
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {loading ? <PageStateLoading /> : null}
+      {error ? <PageStateError message={error} /> : null}
 
-      {!loading && !error && tenantId ? (
+      {!loading && !error && tenantId && stats.items.length === 0 ? <PageStateEmpty message="No stats found." /> : null}
+
+      {!loading && !error && tenantId && stats.items.length > 0 ? (
         <div className="mt-4 overflow-auto rounded-md border">
           <table className="w-full min-w-[520px] text-sm">
             <thead className="bg-muted/50 text-left">
@@ -97,13 +100,6 @@ export default function StatsPage() {
                   <td className="px-3 py-2">{item.count}</td>
                 </tr>
               ))}
-              {stats.items.length === 0 ? (
-                <tr>
-                  <td className="text-muted-foreground px-3 py-4" colSpan={2}>
-                    No stats found.
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>

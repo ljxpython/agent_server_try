@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { PageStateEmpty, PageStateError, PageStateLoading } from "@/components/platform/page-state";
 import {
   type AuditQueryOptions,
   exportTenantAuditLogsCSV,
@@ -225,10 +226,12 @@ export default function AuditPage() {
         </div>
       ) : null}
 
-      {loading ? <p className="mt-4 text-sm">Loading...</p> : null}
-      {error ? <p className="mt-4 text-sm text-red-600">{error}</p> : null}
+      {loading ? <PageStateLoading /> : null}
+      {error ? <PageStateError message={error} /> : null}
 
-      {!loading && !error && tenantId ? (
+      {!loading && !error && tenantId && items.length === 0 ? <PageStateEmpty message="No audit logs found." /> : null}
+
+      {!loading && !error && tenantId && items.length > 0 ? (
         <div className="mt-4 overflow-auto rounded-md border">
           <table className="w-full min-w-[900px] text-sm">
             <thead className="bg-muted/50 text-left">
@@ -252,13 +255,6 @@ export default function AuditPage() {
                   <td className="px-3 py-2">{row.duration_ms}</td>
                 </tr>
               ))}
-              {items.length === 0 ? (
-                <tr>
-                  <td className="text-muted-foreground px-3 py-4" colSpan={6}>
-                    No audit logs found.
-                  </td>
-                </tr>
-              ) : null}
             </tbody>
           </table>
         </div>

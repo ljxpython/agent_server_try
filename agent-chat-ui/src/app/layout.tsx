@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Inter } from "next/font/google";
+import { IBM_Plex_Sans } from "next/font/google";
 import React from "react";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 
-const inter = Inter({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
   preload: true,
   display: "swap",
+  variable: "--font-sans",
 });
 
 export const metadata: Metadata = {
@@ -22,7 +23,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className={`${ibmPlexSans.variable} font-sans`}>
         <NuqsAdapter>{children}</NuqsAdapter>
       </body>
     </html>

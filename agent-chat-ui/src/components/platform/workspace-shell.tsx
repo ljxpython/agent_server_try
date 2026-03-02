@@ -23,20 +23,20 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="bg-background text-foreground min-h-screen">
-      <header className="sticky top-0 z-20 border-b bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+      <header className="bg-background/95 sticky top-0 z-20 border-b border-border/80 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
         <div className="mx-auto flex max-w-[1400px] flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h1 className="text-lg font-semibold">Agent Platform</h1>
-              <p className="text-muted-foreground text-xs">Workspace scope: tenant -&gt; project</p>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold tracking-tight sm:text-lg">Agent Platform</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm">Workspace scope: tenant -&gt; project</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <ScopeSwitcher />
               <AuthControls />
             </div>
           </div>
 
-          <nav className="flex flex-wrap items-center gap-2">
+          <nav data-testid="workspace-nav" className="flex flex-wrap items-center gap-2">
             {NAV_ITEMS.map((item) => {
               const active = pathname?.startsWith(item.href);
               return (
@@ -44,8 +44,10 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={query ? `${item.href}?${query}` : item.href}
                   className={[
-                    "rounded-md border px-3 py-1 text-sm transition-colors",
-                    active ? "bg-foreground text-background" : "hover:bg-muted",
+                    "inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    active
+                      ? "border-sidebar-primary/60 bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                      : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   ].join(" ")}
                 >
                   {item.label}
