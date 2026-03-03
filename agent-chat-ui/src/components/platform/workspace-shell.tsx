@@ -36,13 +36,14 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav data-testid="workspace-nav" className="flex flex-wrap items-center gap-2">
+          <nav data-testid="workspace-nav" aria-label="Workspace sections" className="flex flex-wrap items-center gap-2">
             {NAV_ITEMS.map((item) => {
               const active = pathname?.startsWith(item.href);
               return (
                 <Link
                   key={item.href}
                   href={query ? `${item.href}?${query}` : item.href}
+                  aria-current={active ? "page" : undefined}
                   className={[
                     "inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                     active
@@ -58,7 +59,7 @@ export function WorkspaceShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1">{children}</main>
+      <main className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1 flex-col">{children}</main>
     </div>
   );
 }

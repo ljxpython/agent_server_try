@@ -93,6 +93,7 @@ function OpenGitHubRepo() {
           <a
             href="https://github.com/langchain-ai/agent-chat-ui"
             target="_blank"
+            rel="noreferrer noopener"
             className="flex items-center justify-center"
           >
             <GitHubSVG
@@ -250,7 +251,7 @@ export function Thread() {
     <div className="flex min-h-0 w-full flex-1 overflow-hidden">
       <div className="relative hidden lg:flex">
         <motion.div
-          className="absolute z-20 h-full overflow-hidden border-r bg-white"
+          className="absolute z-20 h-full overflow-hidden border-r border-border/80 bg-card/90 backdrop-blur"
           style={{ width: 300 }}
           animate={{
             x: chatHistoryOpen ? 0 : -300,
@@ -294,7 +295,7 @@ export function Thread() {
               <div>
                 {(!chatHistoryOpen || !isLargeScreen) && (
                   <Button
-                    className="hover:bg-gray-100"
+                    className="hover:bg-accent hover:text-accent-foreground"
                     variant="ghost"
                     onClick={() => setChatHistoryOpen((p) => !p)}
                   >
@@ -317,7 +318,7 @@ export function Thread() {
                 <div className="absolute left-0 z-10">
                   {(!chatHistoryOpen || !isLargeScreen) && (
                     <Button
-                      className="hover:bg-gray-100"
+                      className="hover:bg-accent hover:text-accent-foreground"
                       variant="ghost"
                       onClick={() => setChatHistoryOpen((p) => !p)}
                     >
@@ -367,7 +368,7 @@ export function Thread() {
           <StickToBottom className="relative flex-1 overflow-hidden">
             <StickyToBottomContent
               className={cn(
-                "absolute inset-0 overflow-y-scroll px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-track]:bg-transparent",
+                "absolute inset-0 overflow-y-scroll px-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent",
                 !chatStarted && "mt-[25vh] flex flex-col items-stretch",
                 chatStarted && "grid grid-rows-[1fr_auto]",
               )}
@@ -408,7 +409,7 @@ export function Thread() {
                 </>
               }
               footer={
-                <div className="sticky bottom-0 flex flex-col items-center gap-8 bg-white">
+                <div className="sticky bottom-0 flex flex-col items-center gap-6 bg-background/95 backdrop-blur">
                   {!chatStarted && (
                     <div className="flex items-center gap-3">
                       <LangGraphLogoSVG className="h-8 flex-shrink-0" />
@@ -423,7 +424,7 @@ export function Thread() {
                   <div
                     ref={dropRef}
                     className={cn(
-                      "bg-white relative z-10 mx-auto mb-8 w-full max-w-3xl rounded-2xl shadow-xs transition-all motion-micro",
+                      "bg-card relative z-10 mx-auto mb-6 w-full max-w-3xl rounded-2xl border border-border/80 shadow-sm transition-all motion-micro",
                       dragOver
                         ? "border-primary border-2 border-dotted"
                         : "border border-solid",
@@ -467,7 +468,7 @@ export function Thread() {
                             />
                             <Label
                               htmlFor="render-tool-calls"
-                              className="text-sm text-gray-600"
+                              className="text-sm text-muted-foreground"
                             >
                               Hide Tool Calls
                             </Label>
@@ -477,8 +478,8 @@ export function Thread() {
                           htmlFor="file-input"
                           className="flex cursor-pointer items-center gap-2"
                         >
-                          <Plus className="size-5 text-gray-600" />
-                          <span className="text-sm text-gray-600">
+                          <Plus className="size-5 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
                             Upload PDF or Image
                           </span>
                         </Label>
@@ -524,6 +525,7 @@ export function Thread() {
             <div className="grid grid-cols-[1fr_auto] border-b p-4">
               <ArtifactTitle className="truncate overflow-hidden" />
               <button
+                type="button"
                 onClick={closeArtifact}
                 className="cursor-pointer"
               >

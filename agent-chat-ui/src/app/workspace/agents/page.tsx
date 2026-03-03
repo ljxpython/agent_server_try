@@ -93,7 +93,7 @@ export default function AgentsPage() {
     }
   }, [projectId]);
 
-function startEdit(agent: AssistantProfile) {
+  function startEdit(agent: AssistantProfile) {
     setEditingId(agent.id);
     setForm({
       name: agent.name,
@@ -173,6 +173,8 @@ function startEdit(agent: AssistantProfile) {
     "h-9 rounded-md border border-border bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-50";
   const buttonBaseClassName =
     "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  const helperTextClassName = "text-muted-foreground text-xs leading-relaxed sm:text-sm";
+  const filterLabelClassName = "grid gap-1 text-xs font-medium text-muted-foreground sm:text-sm";
 
   function confirmDelete(agent: AssistantProfile) {
     if (typeof navigator !== "undefined" && navigator.webdriver) {
@@ -189,13 +191,13 @@ function startEdit(agent: AssistantProfile) {
       <h2 className="text-xl font-semibold tracking-tight">Assistants</h2>
       <p className="text-muted-foreground mt-2 text-sm">Project-scoped assistant profiles. Chat runs use selected assistant_id.</p>
 
-      {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
+      {!projectId ? <PageStateNotice message="Select a project first." /> : null}
 
       {projectId ? (
         <form className="mt-4 grid gap-4 rounded-lg border border-border/80 bg-card/70 p-4 shadow-sm" onSubmit={onSubmit}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold tracking-tight">{editingId ? "Update assistant profile" : "Create assistant profile"}</h3>
-            <span className="text-muted-foreground text-xs">Name and Graph ID must be 2-128 chars</span>
+            <span className={`${helperTextClassName} sm:text-right`}>Name and Graph ID must be 2-128 chars</span>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <input
@@ -225,7 +227,7 @@ function startEdit(agent: AssistantProfile) {
                   <option key={value} value={value} />
                 ))}
               </datalist>
-              <p className="text-muted-foreground text-xs leading-relaxed">
+              <p className={helperTextClassName}>
                 Graph ID maps to a deployed graph, while chat execution still uses the selected assistant_id.
               </p>
             </div>
@@ -239,7 +241,7 @@ function startEdit(agent: AssistantProfile) {
                 minLength={10}
                 maxLength={512}
               />
-              <p className="text-muted-foreground text-xs leading-relaxed">Runtime URL is fixed by current platform constraints.</p>
+              <p className={helperTextClassName}>Runtime URL is fixed by current platform constraints.</p>
             </div>
             <input
               className={fieldClassName}
@@ -275,7 +277,7 @@ function startEdit(agent: AssistantProfile) {
       {projectId ? (
         <div className="mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/40 p-3 text-sm sm:flex sm:flex-wrap sm:items-end sm:justify-between">
           <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            <label className={filterLabelClassName}>
               Page size
               <select
                 className={fieldClassName}
@@ -294,7 +296,7 @@ function startEdit(agent: AssistantProfile) {
               </select>
             </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            <label className={filterLabelClassName}>
               Sort by
               <select
                 className={fieldClassName}
@@ -310,7 +312,7 @@ function startEdit(agent: AssistantProfile) {
               </select>
             </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            <label className={filterLabelClassName}>
               Sort order
               <select
                 className={fieldClassName}

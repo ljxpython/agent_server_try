@@ -22,6 +22,11 @@ type WorkspaceContextValue = {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
+function isStaleTenantScopeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("tenant_access_denied") || message.includes("Tenant membership not found");
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [tenantId, setTenantId] = useQueryState("tenantId", {
     defaultValue: process.env.NEXT_PUBLIC_TENANT_ID ?? "",
@@ -30,6 +35,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     defaultValue: process.env.NEXT_PUBLIC_PROJECT_ID ?? "",
   });
   const [assistantId, setAssistantId] = useQueryState("assistantProfileId", {
+    defaultValue: "",
+  });
+  const [, setThreadId] = useQueryState("threadId", {
     defaultValue: "",
   });
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -104,7 +112,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (rows.length === 0) {
           setProjectId("");
         }
-      } catch {
+      } catch (err) {
+        if (!cancelled && isStaleTenantScopeError(err)) {
+          if (tenants.length > 0 && tenantId !== tenants[0].id) {
+            setTenantId(tenants[0].id);
+          } else {
+            setTenantId("");
+          }
+          setProjectId("");
+          setProjects([]);
+          return;
+        }
+
         if (!cancelled) {
           setProjects([]);
         }
@@ -136,11 +155,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setTenantId: (value: string) => {
         setTenantId(value);
         setProjectId("");
+        setThreadId("");
         setAssistantId("");
       },
       projectId: projectId ?? "",
       setProjectId: (value: string) => {
         setProjectId(value);
+        setThreadId("");
         setAssistantId("");
       },
       assistantId: assistantId ?? "",
@@ -149,7 +170,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       projects,
       loading,
     }),
-    [assistantId, loading, projectId, projects, setAssistantId, setProjectId, setTenantId, tenantId, tenants],
+    [assistantId, loading, projectId, projects, setAssistantId, setProjectId, setTenantId, setThreadId, tenantId, tenants],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

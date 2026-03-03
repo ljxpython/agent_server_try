@@ -25,6 +25,14 @@ function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
   return apiUrl;
 }
 
+function isStaleTenantScopeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("tenant_access_denied") ||
+    message.includes("Tenant membership not found")
+  );
+}
+
 interface ThreadContextType {
   getThreads: () => Promise<Thread[]>;
   threads: Thread[];
@@ -60,6 +68,19 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     const finalApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
     const finalAssistantId = assistantId || envAssistantId;
     if (!finalApiUrl || !finalAssistantId) return [];
+
+    if (!tenantId) {
+      logClient({
+        level: "debug",
+        event: "thread_list_skipped_unresolved_tenant_scope",
+        message: "Skipped thread list load because tenant scope is unresolved",
+        context: {
+          assistantId: finalAssistantId,
+          apiUrl: finalApiUrl,
+        },
+      });
+      return [];
+    }
 
     const rawApiKey = getApiKey();
     const clientApiKey =
@@ -102,6 +123,21 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
           error: String(error),
         },
       });
+
+      if (isStaleTenantScopeError(error)) {
+        logClient({
+          level: "warn",
+          event: "thread_list_stale_tenant_scope_recovered",
+          message: "Recovered from stale tenant scope while loading threads",
+          context: {
+            assistantId: finalAssistantId,
+            apiUrl: finalApiUrl,
+            error: String(error),
+          },
+        });
+        return [];
+      }
+
       throw error;
     }
   }, [apiUrl, assistantId, envApiUrl, envAssistantId, tenantId, projectId, autoTokenEnabled]);

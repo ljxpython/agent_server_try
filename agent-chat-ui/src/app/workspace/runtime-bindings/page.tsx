@@ -173,6 +173,8 @@ export default function RuntimeBindingsPage() {
     "h-9 rounded-md border border-border bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-50";
   const buttonBaseClassName =
     "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  const panelClassName = "mt-4 rounded-lg border border-border/80 bg-card/70 p-4 shadow-sm";
+  const filterPanelClassName = "mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/40 p-4 text-sm shadow-sm";
 
   function confirmDelete(binding: EnvironmentMapping) {
     if (typeof navigator !== "undefined" && navigator.webdriver) {
@@ -189,12 +191,12 @@ export default function RuntimeBindingsPage() {
       <h2 className="text-xl font-semibold tracking-tight">Environments</h2>
       <p className="text-muted-foreground mt-2 text-sm">Environment endpoint mapping for the selected assistant profile.</p>
 
-      {!projectId ? <p className="text-muted-foreground mt-4 text-sm">Select a project first.</p> : null}
+      {!projectId ? <PageStateNotice message="Select a project first." /> : null}
 
       {projectId ? (
-        <div className="mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/40 p-3 text-sm sm:flex sm:flex-wrap sm:items-end sm:justify-between">
-          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[220px]">
+        <div className={filterPanelClassName}>
+          <div className="grid gap-3">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:max-w-sm">
               Assistant profile
               <select
                 className={fieldClassName}
@@ -211,59 +213,61 @@ export default function RuntimeBindingsPage() {
               </select>
             </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Page size
-              <select
-                className={fieldClassName}
-                value={pageSize}
-                onChange={(event) => {
-                  setOffset(0);
-                  setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
-                }}
-                disabled={loading}
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    page size {size}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Page size
+                <select
+                  className={fieldClassName}
+                  value={pageSize}
+                  onChange={(event) => {
+                    setOffset(0);
+                    setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
+                  }}
+                  disabled={loading}
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      page size {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Sort by
-              <select
-                className={fieldClassName}
-                value={sortBy}
-                onChange={(event) => {
-                  setOffset(0);
-                  setSortBy(event.target.value as "created_at" | "environment");
-                }}
-                disabled={loading}
-              >
-                <option value="created_at">sort created_at</option>
-                <option value="environment">sort environment</option>
-              </select>
-            </label>
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Sort by
+                <select
+                  className={fieldClassName}
+                  value={sortBy}
+                  onChange={(event) => {
+                    setOffset(0);
+                    setSortBy(event.target.value as "created_at" | "environment");
+                  }}
+                  disabled={loading}
+                >
+                  <option value="created_at">sort created_at</option>
+                  <option value="environment">sort environment</option>
+                </select>
+              </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Sort order
-              <select
-                className={fieldClassName}
-                value={sortOrder}
-                onChange={(event) => {
-                  setOffset(0);
-                  setSortOrder(event.target.value as "asc" | "desc");
-                }}
-                disabled={loading}
-              >
-                <option value="desc">desc</option>
-                <option value="asc">asc</option>
-              </select>
-            </label>
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Sort order
+                <select
+                  className={fieldClassName}
+                  value={sortOrder}
+                  onChange={(event) => {
+                    setOffset(0);
+                    setSortOrder(event.target.value as "asc" | "desc");
+                  }}
+                  disabled={loading}
+                >
+                  <option value="desc">desc</option>
+                  <option value="asc">asc</option>
+                </select>
+              </label>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 border-t border-border/60 pt-3 sm:border-0 sm:pt-0">
             <button
               type="button"
               className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
@@ -286,67 +290,74 @@ export default function RuntimeBindingsPage() {
       ) : null}
 
       {projectId && assistantId ? (
-        <form className="mt-4 grid gap-4 rounded-lg border border-border/80 bg-card/70 p-4 shadow-sm" onSubmit={onUpsertBinding}>
+        <form className={`${panelClassName} grid gap-4`} onSubmit={onUpsertBinding}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold tracking-tight">Create / Update environment mapping</h3>
             <span className="text-muted-foreground text-xs">Assistant and Graph IDs must be 2-128 chars</span>
           </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Environment
-              <select
-                className={fieldClassName}
-                value={bindingForm.environment}
-                onChange={(event) =>
-                  setBindingForm((prev) => ({ ...prev, environment: event.target.value as BindingForm["environment"] }))
-                }
-                disabled={loading || submitting}
-              >
-                {ENV_OPTIONS.map((env) => (
-                  <option key={env} value={env}>
-                    {env}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Assistant ID
-              <input
-                className={fieldClassName}
-                placeholder="Assistant ID"
-                value={bindingForm.assistantId}
-                onChange={(event) => setBindingForm((prev) => ({ ...prev, assistantId: event.target.value }))}
-                disabled={loading || submitting}
-                required
-                minLength={2}
-                maxLength={128}
-              />
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Graph ID
-              <input
-                className={fieldClassName}
-                placeholder="Graph ID"
-                value={bindingForm.graphId}
-                onChange={(event) => setBindingForm((prev) => ({ ...prev, graphId: event.target.value }))}
-                disabled={loading || submitting}
-                required
-                minLength={2}
-                maxLength={128}
-              />
-            </label>
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Runtime URL
-              <input
-                className={`${fieldClassName} text-muted-foreground`}
-                placeholder="Runtime URL"
-                value={bindingForm.runtimeBaseUrl}
-                disabled
-                required
-                minLength={10}
-                maxLength={512}
-              />
-            </label>
+          <div className="grid gap-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Environment
+                <select
+                  className={fieldClassName}
+                  value={bindingForm.environment}
+                  onChange={(event) =>
+                    setBindingForm((prev) => ({ ...prev, environment: event.target.value as BindingForm["environment"] }))
+                  }
+                  disabled={loading || submitting}
+                >
+                  {ENV_OPTIONS.map((env) => (
+                    <option key={env} value={env}>
+                      {env}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Runtime URL
+                <input
+                  className={`${fieldClassName} text-muted-foreground`}
+                  placeholder="Runtime URL"
+                  value={bindingForm.runtimeBaseUrl}
+                  disabled
+                  required
+                  minLength={10}
+                  maxLength={512}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Assistant ID
+                <input
+                  className={fieldClassName}
+                  placeholder="Assistant ID"
+                  value={bindingForm.assistantId}
+                  onChange={(event) => setBindingForm((prev) => ({ ...prev, assistantId: event.target.value }))}
+                  disabled={loading || submitting}
+                  required
+                  minLength={2}
+                  maxLength={128}
+                />
+              </label>
+
+              <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                Graph ID
+                <input
+                  className={fieldClassName}
+                  placeholder="Graph ID"
+                  value={bindingForm.graphId}
+                  onChange={(event) => setBindingForm((prev) => ({ ...prev, graphId: event.target.value }))}
+                  disabled={loading || submitting}
+                  required
+                  minLength={2}
+                  maxLength={128}
+                />
+              </label>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -369,7 +380,7 @@ export default function RuntimeBindingsPage() {
       ) : null}
 
       {!loading && !error && projectId && assistants.length > 0 && !assistantId ? (
-        <PageStateEmpty message="Select an assistant profile to view environment mappings." />
+        <PageStateNotice message="Select an assistant profile to view environment mappings." />
       ) : null}
 
       {!loading && !error && assistantId && bindings.length === 0 ? <PageStateEmpty message="No environment mappings found." /> : null}

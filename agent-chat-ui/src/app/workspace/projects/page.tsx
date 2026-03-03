@@ -142,6 +142,8 @@ export default function ProjectsPage() {
     "h-9 rounded-md border border-border bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-50";
   const buttonBaseClassName =
     "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
+  const cardSurfaceClassName = "rounded-lg border border-border/80 bg-card/70 shadow-sm";
+  const toolbarSurfaceClassName = "rounded-lg border border-border/80 bg-card/40 p-3 text-sm";
 
   function confirmDelete(project: Project) {
     if (typeof navigator !== "undefined" && navigator.webdriver) {
@@ -158,25 +160,28 @@ export default function ProjectsPage() {
       <h2 className="text-xl font-semibold tracking-tight">Projects</h2>
       <p className="text-muted-foreground mt-2 text-sm">Tenant-scoped project list and write operations.</p>
 
-      {!tenantId ? <p className="text-muted-foreground mt-4 text-sm">Select a tenant first.</p> : null}
+      {!tenantId ? <PageStateNotice message="Select a tenant first." /> : null}
 
       {tenantId ? (
-        <form className="mt-4 grid gap-4 rounded-lg border border-border/80 bg-card/70 p-4 shadow-sm" onSubmit={onSubmit}>
+        <form className={`mt-4 grid gap-4 p-4 sm:p-5 ${cardSurfaceClassName}`} onSubmit={onSubmit}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold tracking-tight">{editingId ? "Update project" : "Create project"}</h3>
             <span className="text-muted-foreground text-xs">Name must be 2-128 chars</span>
           </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-            <input
-              className={fieldClassName}
-              placeholder="Project name"
-              value={form.name}
-              onChange={(event) => setForm({ name: event.target.value })}
-              disabled={actionDisabled}
-              required
-              minLength={2}
-              maxLength={128}
-            />
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+              Project name
+              <input
+                className={fieldClassName}
+                placeholder="Project name"
+                value={form.name}
+                onChange={(event) => setForm({ name: event.target.value })}
+                disabled={actionDisabled}
+                required
+                minLength={2}
+                maxLength={128}
+              />
+            </label>
             <button
               type="submit"
               className={`${buttonBaseClassName} border-border bg-foreground text-background hover:bg-foreground/90`}
@@ -201,9 +206,9 @@ export default function ProjectsPage() {
       ) : null}
 
       {tenantId ? (
-        <div className="mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/40 p-3 text-sm sm:flex sm:flex-wrap sm:items-end sm:justify-between">
-          <div className="grid gap-2 sm:flex sm:flex-wrap sm:items-end">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+        <div className={`mt-4 grid gap-3 sm:gap-4 ${toolbarSurfaceClassName} sm:flex sm:flex-wrap sm:items-end sm:justify-between`}>
+          <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[140px]">
               Page size
               <select
                 className={fieldClassName}
@@ -222,7 +227,7 @@ export default function ProjectsPage() {
               </select>
             </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[140px]">
               Sort by
               <select
                 className={fieldClassName}
@@ -238,7 +243,7 @@ export default function ProjectsPage() {
               </select>
             </label>
 
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[140px]">
               Sort order
               <select
                 className={fieldClassName}
@@ -255,7 +260,7 @@ export default function ProjectsPage() {
             </label>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <button
               type="button"
               className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
@@ -284,21 +289,21 @@ export default function ProjectsPage() {
       {!loading && !error && tenantId && items.length === 0 ? <PageStateEmpty message="No projects found." /> : null}
 
       {!loading && !error && tenantId && items.length > 0 ? (
-        <div className="mt-4 overflow-auto rounded-lg border border-border/80 bg-card/70 shadow-sm">
-          <table className="w-full min-w-[720px] text-sm">
+        <div className={`mt-4 overflow-x-auto ${cardSurfaceClassName}`}>
+          <table className="w-full min-w-[680px] text-sm">
             <thead className="bg-muted/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-3 py-2">Name</th>
-                <th className="px-3 py-2">Tenant ID</th>
-                <th className="px-3 py-2">Actions</th>
+                <th className="px-3 py-2 sm:px-4">Name</th>
+                <th className="px-3 py-2 sm:px-4">Tenant ID</th>
+                <th className="px-3 py-2 sm:px-4">Actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map((project) => (
                 <tr key={project.id} className="border-t transition-colors hover:bg-muted/30">
-                  <td className="px-3 py-2 font-medium">{project.name}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{project.tenant_id}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-2 font-medium sm:px-4">{project.name}</td>
+                  <td className="text-muted-foreground break-all px-3 py-2 sm:px-4">{project.tenant_id}</td>
+                  <td className="px-3 py-2 sm:px-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"

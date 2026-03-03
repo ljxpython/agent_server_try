@@ -15,6 +15,19 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { PanelRightOpen, PanelRightClose } from "lucide-react";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 
+const THREAD_HISTORY_SKELETON_KEYS = Array.from(
+  { length: 30 },
+  (_, index) => `thread-history-skeleton-${index + 1}`,
+);
+
+function isStaleTenantScopeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.includes("tenant_access_denied") ||
+    message.includes("Tenant membership not found")
+  );
+}
+
 function ThreadList({
   threads,
   onThreadClick,
@@ -65,9 +78,9 @@ function ThreadList({
 function ThreadHistoryLoading() {
   return (
     <div className="flex h-full w-full flex-col items-start justify-start gap-2 overflow-y-scroll [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border [&::-webkit-scrollbar-track]:bg-transparent">
-      {Array.from({ length: 30 }).map((_, i) => (
+      {THREAD_HISTORY_SKELETON_KEYS.map((key) => (
         <Skeleton
-          key={`skeleton-${i}`}
+          key={key}
           className="h-10 w-[280px]"
         />
       ))}
@@ -90,9 +103,12 @@ export default function ThreadHistory() {
     setThreadsLoading(true);
     getThreads()
       .then(setThreads)
-      .catch(console.error)
+      .catch((error) => {
+        if (isStaleTenantScopeError(error)) return;
+        console.error(error);
+      })
       .finally(() => setThreadsLoading(false));
-  }, []);
+  }, [getThreads, setThreads, setThreadsLoading]);
 
   return (
     <>
