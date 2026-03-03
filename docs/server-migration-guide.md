@@ -318,9 +318,9 @@ OPENFGA_MODEL_FILE=config/openfga-models/v1.json
 
 ### 1) 端口与网络边界
 
-- 远程服务器已落地为 localhost 绑定：`127.0.0.1:18080/18081/5432/11434`。
+- 远程服务器已落地为 localhost 绑定：`127.0.0.1:18080/18081/5432/11434/8123`。
 - 验证方式：`docker ps` + `ss -lntp` 双重确认，避免“容器配置改了但监听还在公网”。
-- 对外探测验证：从服务器本机对公网 IP 探测 `18080/18081/5432/11434` 均应 `closed`。
+- 对外探测验证：从服务器本机对公网 IP 探测 `18080/18081/5432/11434/8123` 均应 `closed`。
 
 ### 2) 本地开发连接方式（推荐固定）
 
@@ -332,6 +332,7 @@ ssh -p 10526 -N \
   -L 28081:127.0.0.1:18081 \
   -L 15432:127.0.0.1:5432 \
   -L 11143:127.0.0.1:11434 \
+  -L 8123:127.0.0.1:8123 \
   root@61.147.247.83
 ```
 
@@ -356,6 +357,7 @@ make dev-down
 - `DATABASE_URL=postgresql+psycopg://agent:<pwd>@127.0.0.1:15432/agent_platform`
 - `KEYCLOAK_ISSUER=http://127.0.0.1:28080/realms/agent-platform`
 - `OPENFGA_URL=http://127.0.0.1:28081`
+- `LANGGRAPH_UPSTREAM_URL=http://127.0.0.1:8123`
 - `OPENFGA_STORE_ID` / `OPENFGA_MODEL_ID` 必须与远端现网一致。
 
 ### 4) 验收顺序（先连通，再鉴权，再授权）
