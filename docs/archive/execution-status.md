@@ -1,5 +1,12 @@
 # 执行状态
 
+## 2026-03 自建认证重构状态（最新）
+
+- 当前以 `docs/self-hosted-auth-rbac-mvp.md` 为唯一执行基线。
+- Keycloak/OpenFGA 兼容链路已停止维护并开始物理删除。
+- 旧 `/_platform/*` 与 legacy service 目录已进入清理阶段。
+- CI 冒烟工作流 `.github/workflows/smoke-e2e.yml` 已移除（按当前重构策略）。
+
 ## 当前焦点
 
 前后端收尾开发（Step 4 已完成）

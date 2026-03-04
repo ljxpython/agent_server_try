@@ -1,67 +1,66 @@
-# 测试与冒烟验证
+# 测试与验证（当前版本）
 
-[![smoke-e2e](https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml/badge.svg)](https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml)
+## 1. 目标
 
-工作流状态页：`https://github.com/ljxpython/agent_server_try/actions/workflows/smoke-e2e.yml`
+本文件只记录当前仓库可执行、可复现的验证方式。
 
-## 端到端 Smoke
+## 2. 后端测试
 
-脚本：`scripts/smoke_e2e.py`
-
-覆盖范围：
-
-- CORS 预检与 401 响应头
-- Keycloak 鉴权
-- 租户/项目/智能体创建
-- OpenFGA 授权与 tuple 回收
-- 透传 runtime 读写策略
-- 审计日志查询
-
-## 运行命令
+### 2.1 快速回归（推荐）
 
 ```bash
-PLATFORM_DB_ENABLED=true \
-KEYCLOAK_AUTH_ENABLED=true \
-KEYCLOAK_AUTH_REQUIRED=true \
-KEYCLOAK_ISSUER=http://127.0.0.1:18080/realms/agent-platform \
-KEYCLOAK_AUDIENCE=agent-proxy \
-OPENFGA_ENABLED=true \
-OPENFGA_AUTHZ_ENABLED=true \
-OPENFGA_AUTO_BOOTSTRAP=false \
-OPENFGA_URL=http://127.0.0.1:18081 \
-OPENFGA_STORE_ID=01KJHRWEE4PEZ943TT56NGYTK8 \
-OPENFGA_MODEL_ID=01KJHRWEEDAYED9JKPCE66KSS1 \
-DATABASE_URL="postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform" \
-RUNTIME_ROLE_ENFORCEMENT_ENABLED=true \
-uv run python scripts/smoke_e2e.py
+PYTHONPATH=. pytest tests/test_self_hosted_auth_basics.py
 ```
 
-成功输出：`PASS: smoke_e2e`
+用途：验证自建认证与管理面基础链路（`/_management/*`）是否可用。
 
-## CI 接入
+### 2.2 额外集成测试（按需）
 
-已提供 GitHub Actions 工作流：`.github/workflows/smoke-e2e.yml`
+```bash
+PYTHONPATH=. pytest tests/test_langgraph_sdk_real_integration.py
+```
 
-触发条件：
+说明：该用例依赖真实上游/环境准备，不作为每次改动的必跑项。
 
-- Push 到 `main/master`
-- Pull Request
+## 3. 前端验证
 
-CI 会自动完成：
+目录：`agent-chat-ui`
 
-1. 启动 PostgreSQL 并执行 Alembic 迁移
-2. 启动 Keycloak 并创建 realm/client/test users
-3. 启动 OpenFGA 并初始化 store/model
-4. 执行 `scripts/smoke_e2e.py`
+### 3.1 构建验证（推荐）
 
-## CI 失败诊断
+```bash
+cd agent-chat-ui
+pnpm build
+```
 
-详见：`docs/ci-troubleshooting.md`
+用途：检查类型与构建是否通过。
 
-## 跨环境模板
+### 3.2 本地运行验证
 
-已提供模板：
+```bash
+cd agent-chat-ui
+pnpm dev
+```
 
-- `config/environments/.env.dev.example`
-- `config/environments/.env.staging.example`
-- `config/environments/.env.prod.example`
+然后手工验证以下页面：
+
+- `/workspace/projects`
+- `/workspace/users`
+- `/workspace/audit`
+- `/workspace/me`
+
+## 4. 变更后最小验收清单
+
+每次涉及管理面改动，至少执行：
+
+1. 后端：`PYTHONPATH=. pytest tests/test_self_hosted_auth_basics.py`
+2. 前端：`cd agent-chat-ui && pnpm build`
+3. 手工：登录后进入 `workspace`，验证关键页面可访问
+
+## 5. 已废弃说明
+
+以下旧路径/流程不再作为当前测试基线：
+
+- `scripts/smoke_e2e.py`
+- `.github/workflows/smoke-e2e.yml`
+- 依赖 Keycloak/OpenFGA 的旧联调链路

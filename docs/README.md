@@ -2,20 +2,28 @@
 
 ## 文档清单
 
-- `docs/platform-plan.md`：平台路线图与分阶段规划。
-- `docs/execution-status.md`：当前阶段执行状态。
+- `docs/management-console-overview.md`：管理界面功能总览（Project/User/Audit/My Profile）。
 - `docs/postgres-operations.md`：PostgreSQL 容器启动、停止、备份与迁移手册。
 - `docs/code-architecture.md`：当前与目标代码架构设计。
-- `docs/keycloak-integration.md`：Keycloak JWT 验签接入与联调说明。
-- `docs/platform-api.md`：租户与成员管理 API 使用说明。
-- `docs/langgraph-official-usage.md`：LangGraph 官方模型对齐使用说明（assistant/thread/run）。
-- `docs/openfga-integration.md`：OpenFGA 启动、初始化与授权接入说明。
+- `docs/self-hosted-auth-rbac-mvp.md`：自建认证与权限系统 MVP 决策稿（去 Keycloak/OpenFGA）。
 - `docs/error-playbook.md`：已遇到问题与修复手册（防踩坑）。
 - `docs/testing.md`：自动化冒烟测试脚本与运行方式。
-- `docs/frontend-platform-plan.md`：前端平台化改造方案（IA、分阶段迁移、风险与落地清单）。
-- `docs/server-migration-guide.md`：服务器迁移手册（PostgreSQL + Keycloak + OpenFGA）。
 - `docs/logging-system.md`：前后端日志系统说明（落盘路径、关键埋点、验证步骤）。
 - `docs/ci-troubleshooting.md`：CI 失败诊断与本地复现指引。
+
+## 已归档文档（docs/archive）
+
+- `docs/archive/keycloak-integration.md`
+- `docs/archive/openfga-integration.md`
+- `docs/archive/platform-api.md`
+- `docs/archive/server-migration-guide.md`
+- `docs/archive/execution-status.md`
+- `docs/archive/frontend-platform-plan.md`
+- `docs/archive/auth-tenant-project-flow.md`
+- `docs/archive/platform-plan.md`
+- `docs/archive/assistant-greenfield-design.md`
+- `docs/archive/fastapi-service-architecture.md`
+- `docs/archive/langgraph-official-usage.md`
 
 ## 文档约定
 

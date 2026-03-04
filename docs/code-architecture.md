@@ -1,113 +1,100 @@
-# 代码架构设计（当前实现）
+# 代码架构说明（当前实现）
 
-> 本文已按当前代码更新。之前“建议目录/目标形态”与现在实现不完全一致，以下内容以仓库现状为准。
+## 1. 总览
 
-## 一眼定位：完全透传 LangGraph API 在哪里
+当前系统由两部分组成：
 
-核心透传代码现在在：`app/api/proxy/runtime_passthrough.py`
+- 后端：FastAPI（管理接口 + 运行时透传）
+- 前端：Next.js（管理界面 + 聊天界面）
 
-- 透传入口路由：`main.py`（`@app.api_route("/{full_path:path}", ...)`）
-- 透传处理函数：`app/api/proxy/runtime_passthrough.py`（`passthrough_request`）
-- 上游 URL 拼接：`app/api/proxy/runtime_passthrough.py`（`_upstream_url`）
-- 请求头清洗：`app/api/proxy/runtime_passthrough.py`（`_strip_request_headers`）
-- 响应头清洗：`app/api/proxy/runtime_passthrough.py`（`_strip_response_headers`）
-- 上游重试/超时/网关错误映射：`app/api/proxy/runtime_passthrough.py`（`while attempt <= retries`）
-- 流式转发（SSE/流响应）：`app/api/proxy/runtime_passthrough.py`（`StreamingResponse`）
+核心方向：
 
-如果你要找“完全透传”的最短路径，先看 `main.py` 的 catch-all 路由，再跳到 `app/api/proxy/runtime_passthrough.py`。
+- 管理能力统一走 `/_management/*`
+- 运行时能力通过 `/_runtime/*` 与透传入口接入 LangGraph
 
-## 当前架构（已落地）
+## 2. 后端架构
 
-当前是“单入口透传 + 控制平面分模块”的形态：
+### 2.1 应用装配入口
 
-### 1) 运行时透传面（Runtime Proxy）
+- `main.py`：仅负责 `app = create_app()`
+- `app/factory.py`：应用真实装配入口
 
-- 主入口：`main.py`（路由） + `app/api/proxy/runtime_passthrough.py`（实现）
-- 行为：
-  - 全路径透传到 `LANGGRAPH_UPSTREAM_URL`
-  - 保留/清洗头部，附加 `x-request-id`
-  - 可选附加 `LANGGRAPH_UPSTREAM_API_KEY`
-  - 失败映射为 `502/504` JSON 错误
-  - 流式响应使用 `StreamingResponse`
+`app/factory.py` 当前装配内容：
 
-### 2) 中间件链路（横切治理）
+1. 挂载路由
+   - `management_router`（`/_management/*`）
+   - `langgraph_router`
+   - `frontend_passthrough_router`
+2. 注册中间件
+   - auth context
+   - audit log
+   - request context
+3. 透传路由
+   - `/_runtime/{full_path:path}`
+   - `/{full_path:path}`（兼容透传）
 
-- 请求上下文与审计：`main.py:429`（`request_context_middleware`）
-- 租户上下文：`app/middleware/tenant_context.py`
-- 鉴权上下文（Keycloak）：`app/middleware/auth_context.py`
-- 运行时策略检查（role / agent mapping / OpenFGA）：`main.py:114`、`main.py:141`、`main.py:249`
+### 2.2 管理接口分层
 
-### 3) 控制平面 API（Platform API）
+目录：`app/api/management/`
 
-- 路由文件：`app/api/platform.py`
-- 挂载点：`main.py:415`（`app.include_router(platform_router)`）
-- 能力：tenant / membership / project / agent / runtime binding / audit 查询与导出
+主要模块：
 
-### 4) 鉴权与授权
+- `auth.py`：登录/刷新/登出/改密
+- `users.py`：用户 CRUD、`/users/me`
+- `projects.py`：项目管理
+- `members.py`：项目成员管理
+- `audit.py`：审计查询
+- `common.py`：通用鉴权/上下文工具
 
-- Keycloak JWT 验签：`app/auth/keycloak.py`
-- OpenFGA 访问检查与 tuple 写入：`app/auth/openfga.py`
+### 2.3 数据层
 
-### 5) 数据层
+目录：`app/db/`
 
-- 模型：`app/db/models.py`
-- 访问：`app/db/access.py`
-- 会话与事务：`app/db/session.py`
-- 迁移：`migrations/`
+- `models.py`：`users/projects/project_members/refresh_tokens/audit_logs` 等模型
+- `access.py`：数据访问函数（查询、写入、约束）
+- `session.py`：会话与事务封装
+- `init_db.py`：初始化核心表
 
-### 6) 日志系统（新增）
+## 3. 前端架构
 
-- 后端日志初始化：`app/logging_setup.py`
-- 日志文件：`logs/backend.log`
+### 3.1 主体目录
 
-## 当前目录（关键部分）
+- `agent-chat-ui/src/app/workspace/*`：管理台页面
+- `agent-chat-ui/src/lib/management-api/*`：管理接口客户端
+- `agent-chat-ui/src/components/platform/*`：管理台组件（分页、搜索、确认弹窗、列拖拽）
 
-```text
-agent_server/
-  app/
-    api/
-      platform.py
-    auth/
-      keycloak.py
-      openfga.py
-    middleware/
-      auth_context.py
-      tenant_context.py
-    api/proxy/
-      runtime_passthrough.py
-    db/
-      models.py
-      access.py
-      session.py
-    logging_setup.py
-  migrations/
-  main.py
-  docs/
-```
+### 3.2 管理页面
 
-## 运行时请求链路（实际）
+- `workspace/projects`
+- `workspace/projects/[projectId]/members`
+- `workspace/users`
+- `workspace/users/[userId]`
+- `workspace/audit`
+- `workspace/me`
 
-1. 请求进入 `/{full_path:path}`（`main.py`）
-2. 中间件写入 `request_id` 并记录入口日志（`main.py:429`）
-3. 租户上下文解析（`tenant_context.py`）
-4. Keycloak token 验签并注入 user context（`auth_context.py`）
-5. 运行时策略检查（role / agent / OpenFGA）
-6. 转发到 LangGraph 上游（`app/api/proxy/runtime_passthrough.py`）
-7. 流式或普通响应回传（`app/api/proxy/runtime_passthrough.py`）
+### 3.3 通用交互能力
 
-## 为什么你会“找不到透传代码”
+- 统一分页组件（支持页大小与指定页跳转）
+- 统一搜索组件
+- 统一危险操作确认弹窗
+- 表格列宽拖拽（含双击重置）
 
-此前文档写的是目标分层。现在已完成第一步：透传实现已抽到 `app/api/proxy/runtime_passthrough.py`，但 `app/services/` 还未实现。
+## 4. 请求链路
 
-结论：
+### 4.1 管理接口链路
 
-- **现在能跑的透传代码在 `app/api/proxy/runtime_passthrough.py`，入口路由仍在 `main.py`。**
-- `app/services/` 仍是后续阶段再实现。
+前端页面 -> `management-api client` -> `/_management/*` -> DB
 
-## 后续重构建议（可选）
+### 4.2 运行时链路
 
-若要提升可维护性，可按不改行为的方式逐步抽离：
+前端/调用方 -> `/_runtime/*`（或兼容透传）-> LangGraph 上游
 
-1. 继续在 `app/api/proxy/` 内按职责拆分 `runtime_passthrough.py`（可拆 `header_policy/retry_policy/stream_forwarder`）
-2. 下一阶段再实现 `app/services/`，把控制平面业务规则从 `app/api/platform.py` 逐步下沉
-3. 每次拆分保持 `@app.api_route` 和返回语义不变，避免透传行为回归
+## 5. 当前权威文档
+
+优先参考：
+
+1. `docs/management-console-overview.md`
+2. `docs/self-hosted-auth-rbac-mvp.md`
+3. `docs/testing.md`
+
+历史方案与旧架构文档统一放在 `docs/archive/`。
