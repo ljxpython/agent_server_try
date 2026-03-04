@@ -7,9 +7,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from app.api.management import router as management_router
 from app.api.frontend_passthrough import router as frontend_passthrough_router
 from app.api.langgraph import router as langgraph_router
-from app.api.platform import router as platform_router
 from app.api.proxy.runtime_passthrough import passthrough_request
 from app.bootstrap.lifespan import lifespan
 from app.config import load_settings
@@ -17,7 +17,6 @@ from app.logging_setup import setup_backend_logging
 from app.middleware.audit_log import register_audit_log_middleware
 from app.middleware.auth_context import register_auth_context_middleware
 from app.middleware.request_context import register_request_context_middleware
-from app.middleware.tenant_context import register_tenant_context_middleware
 
 
 def create_app() -> FastAPI:
@@ -36,7 +35,7 @@ def create_app() -> FastAPI:
     )
     app.state.settings = settings
 
-    app.include_router(platform_router)
+    app.include_router(management_router)
     app.include_router(langgraph_router)
     app.include_router(frontend_passthrough_router)
 
@@ -48,7 +47,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    register_tenant_context_middleware(app, settings)
     register_auth_context_middleware(app, settings)
     register_audit_log_middleware(app, settings)
     register_request_context_middleware(app)
