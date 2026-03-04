@@ -1,0 +1,17 @@
+from __future__ import annotations
+
+from fastapi import APIRouter
+
+from .audit import router as audit_router
+from .auth import router as auth_router
+from .members import router as members_router
+from .projects import router as projects_router
+from .users import router as users_router
+
+
+router = APIRouter(prefix="/_management", tags=["management"])
+router.include_router(auth_router)
+router.include_router(users_router)
+router.include_router(projects_router)
+router.include_router(members_router)
+router.include_router(audit_router)

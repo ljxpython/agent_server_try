@@ -91,15 +91,15 @@ curl http://127.0.0.1:2024/_proxy/health
 ## Docs
 
 - `docs/README.md`
-- `docs/platform-plan.md`
-- `docs/execution-status.md`
+- `docs/management-console-overview.md`
+- `docs/self-hosted-auth-rbac-mvp.md`
 - `docs/postgres-operations.md`
 - `docs/code-architecture.md`
-- `docs/keycloak-integration.md`
-- `docs/langgraph-official-usage.md`
-- `docs/platform-api.md`
-- `docs/openfga-integration.md`
-- `docs/auth-tenant-project-flow.md`
+- `docs/error-playbook.md`
+- `docs/testing.md`
+- `docs/ci-troubleshooting.md`
+- `docs/logging-system.md`
+- `docs/archive/`（历史文档）
 
 ## Environment templates
 

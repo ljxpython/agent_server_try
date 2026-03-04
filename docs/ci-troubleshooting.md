@@ -1,57 +1,75 @@
-# CI 失败诊断（smoke-e2e）
+# CI 失败排查（当前版本）
 
-## 工作流
+## 1. 适用范围
 
-- 名称：`smoke-e2e`
-- 文件：`.github/workflows/smoke-e2e.yml`
+本文件用于排查“当前代码基线”下的构建/测试失败，基线为：
 
-## 快速定位顺序
+- 自建认证
+- `/_management/*` 管理接口
+- `agent-chat-ui` 管理界面
 
-1. 看失败步骤（Install / DB migration / Keycloak / OpenFGA / smoke script）
-2. 看失败前最后 100 行日志
-3. 对照下方常见错误与处理方式
+## 2. 当前建议流水线
 
-## 常见失败与处理
-
-### 1) PostgreSQL 启动超时 / migration 失败
-
-- 现象：`pg_isready` 长时间失败，或 `alembic upgrade head` 失败
-- 处理：
-  - 检查 `DATABASE_URL` 与容器端口是否一致
-  - 本地复现：`uv run alembic upgrade head`
-
-### 2) Keycloak 未就绪 / token 获取失败
-
-- 现象：无法访问 well-known，或 `invalid_client` / `invalid_grant`
-- 处理：
-  - 确认 realm/client/user 创建命令执行成功
-  - 确认用户密码不是 temporary，资料完整
-
-### 3) OpenFGA 初始化失败
-
-- 现象：`setup_openfga.py` 报 store/model 错误
-- 处理：
-  - 检查 `OPENFGA_URL` 可达
-  - 本地执行：`PYTHONPATH=. OPENFGA_URL=http://127.0.0.1:18081 uv run python scripts/setup_openfga.py`
-
-### 4) smoke_e2e 失败
-
-- 现象：`scripts/smoke_e2e.py` 中断
-- 处理：
-  - 本地按 CI 同参数运行一次
-  - 对照 `docs/testing.md` 和 `docs/error-playbook.md`
-
-## 本地复现 CI（推荐）
+按顺序执行本地同等命令：
 
 ```bash
-uv sync
-uv run alembic upgrade head
-uv run python scripts/smoke_e2e.py
+PYTHONPATH=. pytest tests/test_self_hosted_auth_basics.py
+cd agent-chat-ui && pnpm build
 ```
 
-## 何时重跑 CI
+如果以上命令本地都通过，CI 失败通常是环境差异。
 
-- 临时网络或容器拉取波动导致失败
-- 无代码变更的基础设施抖动
+## 3. 常见失败与处理
 
-如果是确定性失败（同一步稳定失败），先修复再重跑。
+### 3.1 Python 导入失败（`ModuleNotFoundError: app`）
+
+原因：未设置项目根路径。
+
+处理：
+
+```bash
+PYTHONPATH=. pytest tests/test_self_hosted_auth_basics.py
+```
+
+### 3.2 前端依赖或锁文件不一致
+
+原因：`pnpm-lock.yaml` 与安装环境不一致。
+
+处理：
+
+```bash
+cd agent-chat-ui
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+### 3.3 前端构建通过但有 ESLint warning
+
+说明：当前仓库存在历史 warning；若非本次改动引入，可记录为非阻断。
+
+### 3.4 环境变量导致行为差异
+
+建议最小化环境变量，只保留必要项。
+
+后端至少保证：
+
+- `AUTH_REQUIRED`（按环境）
+- `JWT_SECRET`
+- `DATABASE_URL`（启用 DB 时）
+
+前端至少保证：
+
+- `NEXT_PUBLIC_API_URL` 或 `NEXT_PUBLIC_PLATFORM_API_URL`
+
+## 4. 排查顺序（推荐）
+
+1. 先跑后端测试（定位接口层问题）
+2. 再跑前端构建（定位类型/页面问题）
+3. 最后对比 CI 环境变量与本地差异
+
+## 5. 已废弃说明
+
+以下内容不再作为当前 CI 主流程参考：
+
+- Keycloak/OpenFGA 初始化链路
+- `smoke-e2e.yml` 工作流
