@@ -1,72 +1,51 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
-import { startOidcLogin } from "@/lib/oidc-client";
+import { login } from "@/lib/management-api/auth";
 import { ensureApiUrlSeeded, setOidcTokenSet } from "@/lib/oidc-storage";
+
 
 export default function LoginPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [accountLoading, setAccountLoading] = useState(false);
-  const [accountError, setAccountError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if ((process.env.NEXT_PUBLIC_OIDC_ENABLED ?? "false") !== "true") {
-      setError("OIDC login is disabled. Enable NEXT_PUBLIC_OIDC_ENABLED=true.");
-    }
-  }, []);
 
   return (
     <section className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center gap-4 p-6 text-center">
       <h1 className="text-2xl font-semibold">Sign in</h1>
-      <p className="text-muted-foreground text-sm">
-        You can use browser OIDC login or account/password login.
-      </p>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <p className="text-muted-foreground text-sm">Use your username and password to continue.</p>
 
       <form
         className="w-full rounded-md border p-4 text-left"
         onSubmit={async (event) => {
           event.preventDefault();
-          setAccountError(null);
-          setAccountLoading(true);
+          setError(null);
+          setLoading(true);
           const formData = new FormData(event.currentTarget);
           const username = String(formData.get("username") ?? "").trim();
           const password = String(formData.get("password") ?? "");
 
           try {
-            const response = await fetch("/api/keycloak-token", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, password }),
-            });
-            const payload = (await response.json().catch(() => ({}))) as {
-              access_token?: string;
-              expires_at?: number;
-              message?: string;
-              body?: string;
-            };
-
-            if (!response.ok || !payload.access_token) {
-              throw new Error(payload.message || payload.body || "Account login failed");
+            const payload = await login({ username, password });
+            if (!payload.access_token) {
+              throw new Error("Account login failed");
             }
 
             setOidcTokenSet({
               access_token: payload.access_token,
-              expires_at: payload.expires_at,
+              refresh_token: payload.refresh_token,
             });
             ensureApiUrlSeeded();
             router.replace("/workspace/chat");
           } catch (submitError) {
-            setAccountError(submitError instanceof Error ? submitError.message : "Account login failed");
+            setError(submitError instanceof Error ? submitError.message : "Account login failed");
           } finally {
-            setAccountLoading(false);
+            setLoading(false);
           }
         }}
       >
-        <p className="mb-3 text-sm font-medium">Account login (Direct Access Grant)</p>
         <div className="mb-3 flex flex-col gap-1">
           <label htmlFor="username" className="text-xs text-muted-foreground">Username</label>
           <input id="username" name="username" required className="rounded-md border px-3 py-2 text-sm" />
@@ -81,26 +60,15 @@ export default function LoginPage() {
             className="rounded-md border px-3 py-2 text-sm"
           />
         </div>
-        {accountError ? <p className="mb-2 text-xs text-red-600">{accountError}</p> : null}
+        {error ? <p className="mb-2 text-xs text-red-600">{error}</p> : null}
         <button
           type="submit"
-          disabled={accountLoading}
+          disabled={loading}
           className="bg-foreground text-background rounded-md px-4 py-2 text-sm disabled:opacity-60"
         >
-          {accountLoading ? "Signing in..." : "Sign in with account"}
+          {loading ? "Signing in..." : "Sign in"}
         </button>
       </form>
-
-      <p className="text-muted-foreground text-xs">or</p>
-
-      <button
-        type="button"
-        className="bg-foreground text-background rounded-md px-4 py-2 text-sm"
-        onClick={() => startOidcLogin("/workspace/chat")}
-        disabled={Boolean(error)}
-      >
-        Continue with Keycloak
-      </button>
     </section>
   );
 }

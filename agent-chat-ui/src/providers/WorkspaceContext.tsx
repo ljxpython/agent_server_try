@@ -1,12 +1,11 @@
 "use client";
 
-import { listProjects } from "@/lib/platform-api/projects";
-import { listTenants } from "@/lib/platform-api/tenants";
-import type { Project, Tenant } from "@/lib/platform-api/types";
+import { listProjects, type ManagementProject } from "@/lib/management-api/projects";
 import { logClient } from "@/lib/client-logger";
 import { useQueryState } from "nuqs";
 import type { ReactNode } from "react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+
 
 type WorkspaceContextValue = {
   tenantId: string;
@@ -15,94 +14,33 @@ type WorkspaceContextValue = {
   setProjectId: (value: string) => void;
   assistantId: string;
   setAssistantId: (value: string) => void;
-  tenants: Tenant[];
-  projects: Project[];
+  tenants: { id: string; name: string }[];
+  projects: ManagementProject[];
   loading: boolean;
 };
 
+
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
 
-function isStaleTenantScopeError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  return message.includes("tenant_access_denied") || message.includes("Tenant membership not found");
-}
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-  const [tenantId, setTenantId] = useQueryState("tenantId", {
-    defaultValue: process.env.NEXT_PUBLIC_TENANT_ID ?? "",
-  });
-  const [projectId, setProjectId] = useQueryState("projectId", {
-    defaultValue: process.env.NEXT_PUBLIC_PROJECT_ID ?? "",
-  });
-  const [assistantId, setAssistantId] = useQueryState("assistantId", {
-    defaultValue: "",
-  });
-  const [, setThreadId] = useQueryState("threadId", {
-    defaultValue: "",
-  });
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [tenantId] = useQueryState("tenantId", { defaultValue: "" });
+  const [projectId, setProjectId] = useQueryState("projectId", { defaultValue: "" });
+  const [assistantId, setAssistantId] = useQueryState("assistantId", { defaultValue: "" });
+  const [, setThreadId] = useQueryState("threadId", { defaultValue: "" });
+  const [projects, setProjects] = useState<ManagementProject[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadTenants() {
-      setLoading(true);
-      try {
-        const rows = await listTenants();
-        if (cancelled) return;
-        setTenants(rows);
-
-        const tenantStillValid = rows.some((item) => item.id === tenantId);
-        if ((!tenantId || !tenantStillValid) && rows.length > 0) {
-          setTenantId(rows[0].id);
-        }
-      } catch {
-        if (!cancelled) {
-          setTenants([]);
-        }
-        logClient({
-          level: "error",
-          event: "workspace_load_tenants_error",
-          message: "Failed to load tenants",
-        });
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    loadTenants();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [setTenantId, tenantId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
     async function loadProjects() {
-      if (!tenantId || tenants.length === 0) {
-        setProjects([]);
-        setProjectId("");
-        return;
-      }
-
-      const tenantStillValid = tenants.some((item) => item.id === tenantId);
-      if (!tenantStillValid) {
-        setTenantId(tenants[0].id);
-        setProjects([]);
-        setProjectId("");
-        return;
-      }
-
       setLoading(true);
       try {
-        const rows = await listProjects(tenantId);
-        if (cancelled) return;
+        const rows = await listProjects({ limit: 100, offset: 0 });
+        if (cancelled) {
+          return;
+        }
         setProjects(rows);
 
         const projectStillValid = rows.some((item) => item.id === projectId);
@@ -113,17 +51,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           setProjectId("");
         }
       } catch (err) {
-        if (!cancelled && isStaleTenantScopeError(err)) {
-          if (tenants.length > 0 && tenantId !== tenants[0].id) {
-            setTenantId(tenants[0].id);
-          } else {
-            setTenantId("");
-          }
-          setProjectId("");
-          setProjects([]);
-          return;
-        }
-
         if (!cancelled) {
           setProjects([]);
         }
@@ -131,9 +58,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           level: "error",
           event: "workspace_load_projects_error",
           message: "Failed to load projects",
-          context: {
-            tenantId,
-          },
+          context: { error: String(err) },
         });
       } finally {
         if (!cancelled) {
@@ -142,22 +67,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    loadProjects();
+    void loadProjects();
 
     return () => {
       cancelled = true;
     };
-  }, [projectId, setProjectId, setTenantId, tenantId, tenants]);
+  }, [projectId, setProjectId]);
 
   const value = useMemo<WorkspaceContextValue>(
     () => ({
       tenantId: tenantId ?? "",
-      setTenantId: (value: string) => {
-        setTenantId(value);
-        setProjectId("");
-        setThreadId(null);
-        setAssistantId("");
-      },
+      setTenantId: () => {},
       projectId: projectId ?? "",
       setProjectId: (value: string) => {
         setProjectId(value);
@@ -166,15 +86,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       },
       assistantId: assistantId ?? "",
       setAssistantId,
-      tenants,
+      tenants: [],
       projects,
       loading,
     }),
-    [assistantId, loading, projectId, projects, setAssistantId, setProjectId, setTenantId, setThreadId, tenantId, tenants],
+    [assistantId, loading, projectId, projects, setAssistantId, setProjectId, setThreadId, tenantId],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;
 }
+
 
 export function useWorkspaceContext() {
   const context = useContext(WorkspaceContext);

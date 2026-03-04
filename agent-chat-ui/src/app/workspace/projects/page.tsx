@@ -1,336 +1,197 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import { ColumnResizeHandle, useResizableColumns } from "@/components/platform/column-resize";
+import { ConfirmDialog } from "@/components/platform/confirm-dialog";
+import { ListSearch } from "@/components/platform/list-search";
 import {
   PageStateEmpty,
   PageStateError,
   PageStateLoading,
   PageStateNotice,
 } from "@/components/platform/page-state";
-import { toUserErrorMessage } from "@/lib/platform-api/errors";
-import { createProject, deleteProject, listProjects, updateProject } from "@/lib/platform-api/projects";
-import type { Project } from "@/lib/platform-api/types";
+import { DEFAULT_PAGE_SIZE_OPTIONS, PaginationControls } from "@/components/platform/pagination-controls";
+import { deleteProject, listProjectsPage, type ManagementProject } from "@/lib/management-api/projects";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
-const PAGE_SIZE = 20;
-const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
-
-type ProjectForm = {
-  name: string;
-};
-
-const DEFAULT_FORM: ProjectForm = {
-  name: "",
-};
 
 export default function ProjectsPage() {
-  const { tenantId, projectId, setProjectId } = useWorkspaceContext();
-  const [items, setItems] = useState<Project[]>([]);
+  const projectColumnKeys = ["index", "name", "description", "status", "actions"] as const;
+  const { projectId, setProjectId } = useWorkspaceContext();
+  const [items, setItems] = useState<ManagementProject[]>([]);
+  const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [pageSize, setPageSize] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(PAGE_SIZE);
-  const [sortBy, setSortBy] = useState<"created_at" | "name">("created_at");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [pageSize, setPageSize] = useState(20);
+  const [customPage, setCustomPage] = useState("1");
+  const [query, setQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDeleteProject, setPendingDeleteProject] = useState<ManagementProject | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [form, setForm] = useState<ProjectForm>(DEFAULT_FORM);
+  const { columnWidths, startResize, resetColumnWidth, resizingColumnIndex } = useResizableColumns([80, 220, 280, 140, 220], {
+    storageKey: "table-columns-projects",
+  });
+  const tableWidth = Math.max(760, columnWidths.reduce((sum, width) => sum + width, 0));
 
   const refreshList = useCallback(async () => {
-    if (!tenantId) {
-      setItems([]);
-      setOffset(0);
-      setError(null);
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {
-      const rows = await listProjects(tenantId, {
-        limit: pageSize,
-        offset,
-        sortBy,
-        sortOrder,
-      });
+      const payload = await listProjectsPage({ limit: pageSize, offset, query });
+      const rows = payload.items;
       setItems(rows);
+      setTotal(payload.total);
+      if (payload.total > 0 && offset >= payload.total) {
+        const fallbackOffset = Math.max(0, (Math.ceil(payload.total / pageSize) - 1) * pageSize);
+        if (fallbackOffset !== offset) {
+          setOffset(fallbackOffset);
+          return;
+        }
+      }
+      if (rows.length > 0 && !rows.some((item) => item.id === projectId)) {
+        setProjectId(rows[0].id);
+      }
+      if (rows.length === 0) {
+        setProjectId("");
+      }
     } catch (err) {
-      setError(toUserErrorMessage(err));
+      setError(err instanceof Error ? err.message : "Failed to load projects");
     } finally {
       setLoading(false);
     }
-  }, [offset, pageSize, sortBy, sortOrder, tenantId]);
+  }, [offset, pageSize, projectId, query, setProjectId]);
 
   useEffect(() => {
     void refreshList();
   }, [refreshList]);
 
-  useEffect(() => {
-    if (!tenantId) {
-      setForm(DEFAULT_FORM);
-      setEditingId(null);
-      setNotice(null);
-      setError(null);
-    }
-  }, [tenantId]);
-
-  function startEdit(project: Project) {
-    setEditingId(project.id);
-    setForm({ name: project.name });
-    setNotice(null);
-    setError(null);
-  }
-
-  function resetForm() {
-    setEditingId(null);
-    setForm(DEFAULT_FORM);
-  }
-
-  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!tenantId) return;
-
-    setSubmitting(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const normalizedName = form.name.trim();
-      if (editingId) {
-        const updated = await updateProject(editingId, { name: normalizedName });
-        setNotice(`Updated project: ${updated.name}`);
-      } else {
-        const created = await createProject({ tenant_id: tenantId, name: normalizedName });
-        setNotice(`Created project: ${created.name}`);
-        setOffset(0);
-        setProjectId(created.id);
-      }
-      resetForm();
-      await refreshList();
-    } catch (err) {
-      setError(toUserErrorMessage(err));
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function onDeleteProject(project: Project) {
+  async function onDeleteProject(project: ManagementProject) {
     setRemovingId(project.id);
     setError(null);
     setNotice(null);
     try {
       await deleteProject(project.id);
-      if (editingId === project.id) {
-        resetForm();
-      }
       if (projectId === project.id) {
         setProjectId("");
       }
       setNotice(`Deleted project: ${project.name}`);
+      if (offset > 0 && items.length === 1) {
+        setOffset((prev) => Math.max(0, prev - pageSize));
+      }
       await refreshList();
     } catch (err) {
-      setError(toUserErrorMessage(err));
+      setError(err instanceof Error ? err.message : "Failed to delete project");
     } finally {
+      setPendingDeleteProject((current) => (current?.id === project.id ? null : current));
       setRemovingId(null);
     }
   }
 
-  const actionDisabled = loading || submitting || !tenantId;
-  const fieldClassName =
-    "h-9 rounded-md border border-border bg-background px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:cursor-not-allowed disabled:opacity-50";
-  const buttonBaseClassName =
-    "inline-flex h-9 items-center justify-center rounded-md border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
-  const cardSurfaceClassName = "rounded-lg border border-border/80 bg-card/70 shadow-sm";
-  const toolbarSurfaceClassName = "rounded-lg border border-border/80 bg-card/40 p-3 text-sm";
-
-  function confirmDelete(project: Project) {
-    if (typeof navigator !== "undefined" && navigator.webdriver) {
-      return true;
+  function applyCustomPage() {
+    const parsed = Number(customPage);
+    if (!Number.isFinite(parsed)) {
+      return;
     }
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return window.confirm(`Delete project "${project.name}"? This action cannot be undone.`);
+    const normalizedPage = Math.max(1, Math.floor(parsed));
+    setOffset((normalizedPage - 1) * pageSize);
+    setCustomPage(String(normalizedPage));
   }
+
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(maxPage, Math.floor(offset / pageSize) + 1);
 
   return (
     <section className="p-4 sm:p-6">
       <h2 className="text-xl font-semibold tracking-tight">Projects</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Tenant-scoped project list and write operations.</p>
+      <p className="text-muted-foreground mt-2 text-sm">Project list view. Create operations are on a dedicated page.</p>
 
-      {!tenantId ? <PageStateNotice message="Select a tenant first." /> : null}
+      <div className="mt-4">
+        <Link
+          href="/workspace/projects/new"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-foreground px-3 text-sm font-medium text-background"
+        >
+          Go to Create Project
+        </Link>
+      </div>
 
-      {tenantId ? (
-        <form className={`mt-4 grid gap-4 p-4 sm:p-5 ${cardSurfaceClassName}`} onSubmit={onSubmit}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold tracking-tight">{editingId ? "Update project" : "Create project"}</h3>
-            <span className="text-muted-foreground text-xs">Name must be 2-128 chars</span>
-          </div>
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-              Project name
-              <input
-                className={fieldClassName}
-                placeholder="Project name"
-                value={form.name}
-                onChange={(event) => setForm({ name: event.target.value })}
-                disabled={actionDisabled}
-                required
-                minLength={2}
-                maxLength={128}
-              />
-            </label>
-            <button
-              type="submit"
-              className={`${buttonBaseClassName} border-border bg-foreground text-background hover:bg-foreground/90`}
-              disabled={actionDisabled}
-            >
-              {submitting ? (editingId ? "Updating..." : "Creating...") : editingId ? "Update" : "Create"}
-            </button>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {editingId ? (
-              <button
-                type="button"
-                className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
-                onClick={resetForm}
-                disabled={actionDisabled}
-              >
-                Cancel edit
-              </button>
-            ) : null}
-          </div>
-        </form>
-      ) : null}
-
-      {tenantId ? (
-        <div className={`mt-4 grid gap-3 sm:gap-4 ${toolbarSurfaceClassName} sm:flex sm:flex-wrap sm:items-end sm:justify-between`}>
-          <div className="grid gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[140px]">
-              Page size
-              <select
-                className={fieldClassName}
-                value={pageSize}
-                onChange={(event) => {
-                  setOffset(0);
-                  setPageSize(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
-                }}
-                disabled={loading}
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    page size {size}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[140px]">
-              Sort by
-              <select
-                className={fieldClassName}
-                value={sortBy}
-                onChange={(event) => {
-                  setOffset(0);
-                  setSortBy(event.target.value as "created_at" | "name");
-                }}
-                disabled={loading}
-              >
-                <option value="created_at">sort created_at</option>
-                <option value="name">sort name</option>
-              </select>
-            </label>
-
-            <label className="grid gap-1 text-xs font-medium text-muted-foreground sm:min-w-[140px]">
-              Sort order
-              <select
-                className={fieldClassName}
-                value={sortOrder}
-                onChange={(event) => {
-                  setOffset(0);
-                  setSortOrder(event.target.value as "asc" | "desc");
-                }}
-                disabled={loading}
-              >
-                <option value="desc">desc</option>
-                <option value="asc">asc</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <button
-              type="button"
-              className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
-              onClick={() => setOffset((prev) => Math.max(0, prev - pageSize))}
-              disabled={loading || offset === 0}
-            >
-              Prev
-            </button>
-            <button
-              type="button"
-              className={`${buttonBaseClassName} border-border bg-background hover:bg-muted/50`}
-              onClick={() => setOffset((prev) => prev + pageSize)}
-              disabled={loading || items.length < pageSize}
-            >
-              Next
-            </button>
-            <span className="text-muted-foreground text-xs sm:text-sm">offset={offset}</span>
-          </div>
-        </div>
-      ) : null}
+      <ListSearch
+        value={searchInput}
+        placeholder="Search by project name or description"
+        onValueChange={setSearchInput}
+        onSearch={(keyword) => {
+          setOffset(0);
+          setCustomPage("1");
+          setQuery(keyword);
+        }}
+        onClear={() => {
+          setQuery("");
+          setOffset(0);
+          setCustomPage("1");
+        }}
+      />
 
       {loading ? <PageStateLoading /> : null}
       {error ? <PageStateError message={error} /> : null}
       {notice ? <PageStateNotice message={notice} /> : null}
 
-      {!loading && !error && tenantId && items.length === 0 ? <PageStateEmpty message="No projects found." /> : null}
+      {!loading && !error && items.length === 0 ? <PageStateEmpty message="No projects found." /> : null}
 
-      {!loading && !error && tenantId && items.length > 0 ? (
-        <div className={`mt-4 overflow-x-auto ${cardSurfaceClassName}`}>
-          <table className="w-full min-w-[680px] text-sm">
+      {!loading && !error && items.length > 0 ? (
+        <div className="mt-4 overflow-x-auto rounded-lg border border-border/80 bg-card/70">
+          <table className="min-w-[760px] table-fixed text-sm" style={{ width: `max(100%, ${tableWidth}px)` }}>
+            <colgroup>
+              {columnWidths.map((width, index) => (
+                <col key={projectColumnKeys[index]} style={{ width }} />
+              ))}
+            </colgroup>
             <thead className="bg-muted/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 sm:px-4">Name</th>
-                <th className="px-3 py-2 sm:px-4">Tenant ID</th>
-                <th className="px-3 py-2 sm:px-4">Actions</th>
+                <th className="relative px-4 py-2">#<ColumnResizeHandle active={resizingColumnIndex === 0} onMouseDown={(event) => startResize(0, event)} onDoubleClick={() => resetColumnWidth(0)} /></th>
+                <th className="relative px-4 py-2">Name<ColumnResizeHandle active={resizingColumnIndex === 1} onMouseDown={(event) => startResize(1, event)} onDoubleClick={() => resetColumnWidth(1)} /></th>
+                <th className="relative px-4 py-2">Description<ColumnResizeHandle active={resizingColumnIndex === 2} onMouseDown={(event) => startResize(2, event)} onDoubleClick={() => resetColumnWidth(2)} /></th>
+                <th className="relative px-4 py-2">Status<ColumnResizeHandle active={resizingColumnIndex === 3} onMouseDown={(event) => startResize(3, event)} onDoubleClick={() => resetColumnWidth(3)} /></th>
+                <th className="relative px-4 py-2">Actions<ColumnResizeHandle active={resizingColumnIndex === 4} onMouseDown={(event) => startResize(4, event)} onDoubleClick={() => resetColumnWidth(4)} /></th>
               </tr>
             </thead>
             <tbody>
-              {items.map((project) => (
+              {items.map((project, index) => (
                 <tr key={project.id} className="border-t transition-colors hover:bg-muted/30">
-                  <td className="px-3 py-2 font-medium sm:px-4">{project.name}</td>
-                  <td className="text-muted-foreground break-all px-3 py-2 sm:px-4">{project.tenant_id}</td>
-                  <td className="px-3 py-2 sm:px-4">
+                  <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{offset + index + 1}</td>
+                  <td className="px-4 py-2 font-medium">
+                    <Link
+                      href={`/workspace/projects/${project.id}`}
+                      className="text-primary underline-offset-2 hover:underline"
+                      onClick={() => setProjectId(project.id)}
+                    >
+                      {project.name}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2 text-muted-foreground">{project.description || "-"}</td>
+                  <td className="px-4 py-2 text-muted-foreground">{project.status}</td>
+                  <td className="px-4 py-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        className={`${buttonBaseClassName} h-8 border-border bg-background px-2 text-xs hover:bg-muted/50`}
-                        onClick={() => startEdit(project)}
-                        disabled={loading || submitting || removingId === project.id}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={`${buttonBaseClassName} h-8 border-border bg-background px-2 text-xs hover:bg-muted/50`}
-                        onClick={() => setProjectId(project.id)}
-                        disabled={loading || submitting || removingId === project.id || projectId === project.id}
-                      >
-                        {projectId === project.id ? "Selected" : "Use"}
-                      </button>
-                      <button
-                        type="button"
-                        className={`${buttonBaseClassName} h-8 border-destructive/40 bg-destructive/5 px-2 text-xs text-destructive hover:bg-destructive/10`}
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
                         onClick={() => {
-                          if (!confirmDelete(project)) {
-                            return;
+                          setProjectId(project.id);
+                          if (typeof window !== "undefined") {
+                            window.location.href = `/workspace/projects/${project.id}`;
                           }
-                          void onDeleteProject(project);
                         }}
-                        disabled={loading || submitting || removingId === project.id}
+                        disabled={removingId === project.id}
+                      >
+                        Manage
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-destructive/40 bg-destructive/5 px-2 text-xs text-destructive"
+                        onClick={() => setPendingDeleteProject(project)}
+                        disabled={removingId === project.id}
                       >
                         {removingId === project.id ? "Deleting..." : "Delete"}
                       </button>
@@ -341,6 +202,46 @@ export default function ProjectsPage() {
             </tbody>
           </table>
         </div>
+      ) : null}
+
+      <ConfirmDialog
+        open={pendingDeleteProject !== null}
+        title="Delete project"
+        description={pendingDeleteProject ? `Are you sure you want to delete project "${pendingDeleteProject.name}"?` : undefined}
+        confirmLabel="Delete"
+        confirmLabelLoading="Deleting..."
+        loading={pendingDeleteProject ? removingId === pendingDeleteProject.id : false}
+        onCancel={() => setPendingDeleteProject(null)}
+        onConfirm={() => {
+          if (!pendingDeleteProject) {
+            return;
+          }
+          void onDeleteProject(pendingDeleteProject);
+        }}
+      />
+
+      {!loading && !error ? (
+        <PaginationControls
+          total={total}
+          offset={offset}
+          pageSize={pageSize}
+          customPage={customPage}
+          currentPage={currentPage}
+          maxPage={maxPage}
+          loading={loading}
+          pageSizeOptions={DEFAULT_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={(next) => {
+            setOffset(0);
+            setPageSize(next);
+            setCustomPage("1");
+          }}
+          onCustomPageChange={setCustomPage}
+          onApplyCustomPage={applyCustomPage}
+          onPrevious={() => setOffset((prev) => Math.max(0, prev - pageSize))}
+          onNext={() => setOffset((prev) => prev + pageSize)}
+          previousDisabled={loading || offset === 0}
+          nextDisabled={loading || offset + pageSize >= total}
+        />
       ) : null}
     </section>
   );

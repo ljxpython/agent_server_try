@@ -26,8 +26,6 @@ import { ArrowRight } from "lucide-react";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
 import { logClient } from "@/lib/client-logger";
-import { listAssistants } from "@/lib/platform-api/assistants";
-import type { AssistantProfile } from "@/lib/platform-api/types";
 import { isJwtToken } from "@/lib/token";
 import { useThreads } from "./Thread";
 import { useWorkspaceContext } from "./WorkspaceContext";
@@ -78,40 +76,11 @@ async function checkGraphStatus(
   }
 }
 
-async function fetchAutoToken(): Promise<string | null> {
-  try {
-    const res = await fetch("/api/keycloak-token", {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      return null;
-    }
-
-    const payload = (await res.json()) as { access_token?: string };
-    if (!payload.access_token) {
-      return null;
-    }
-    return payload.access_token;
-  } catch (error) {
-    await logClient({
-      level: "error",
-      event: "stream_auto_token_fetch_error",
-      message: "Failed to fetch auto token",
-      context: {
-        error: String(error),
-      },
-    });
-    return null;
-  }
-}
-
 const StreamSession = ({
   children,
   apiKey,
   apiUrl,
   assistantId,
-  tenantId,
   projectId,
   autoTokenEnabled,
 }: {
@@ -119,7 +88,6 @@ const StreamSession = ({
   apiKey: string | null;
   apiUrl: string;
   assistantId: string;
-  tenantId: string;
   projectId: string;
   autoTokenEnabled: boolean;
 }) => {
@@ -127,10 +95,9 @@ const StreamSession = ({
   const { getThreads, setThreads } = useThreads();
   const runtimeHeaders = useMemo<Record<string, string>>(
     () => ({
-      ...(tenantId ? { "x-tenant-id": tenantId } : {}),
       ...(projectId ? { "x-project-id": projectId } : {}),
     }),
-    [tenantId, projectId],
+    [projectId],
   );
 
   const authHeaders = useMemo<Record<string, string>>(() => {
@@ -270,9 +237,8 @@ function appendLangGraphApiPrefix(apiUrl: string): string {
 export const StreamProvider: FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { tenantId, projectId, assistantId: selectedAssistantId, setAssistantId: setSelectedAssistantId } =
-    useWorkspaceContext();
-  const autoTokenEnabled = process.env.NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN === "true";
+  const { projectId } = useWorkspaceContext();
+  const autoTokenEnabled = false;
 
   // Get environment variables
   const envApiUrl: string | undefined = process.env.NEXT_PUBLIC_API_URL;
@@ -286,7 +252,6 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   const [assistantId, setAssistantId] = useQueryState("assistantId", {
     defaultValue: envAssistantId || "",
   });
-  const [, setThreadId] = useQueryState("threadId");
 
   const [apiKey, _setApiKey] = useState(() => {
     if (autoTokenEnabled) {
@@ -295,7 +260,6 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
     const storedKey = getApiKey();
     return storedKey || "";
   });
-  const [autoTokenReady, setAutoTokenReady] = useState(!autoTokenEnabled);
 
   const setApiKey = useCallback((key: string) => {
     window.localStorage.setItem("lg:chat:apiKey", key);
@@ -339,147 +303,10 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
     }
   }, [apiUrl, setApiUrl]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function syncExecutionTargetFromProjectScope() {
-      if (!projectId) {
-        return;
-      }
-
-      try {
-        const assistants = await listAssistants(projectId, {
-          limit: 100,
-          sortBy: "created_at",
-          sortOrder: "desc",
-        });
-        if (cancelled || assistants.length === 0) {
-          return;
-        }
-
-        const resolveAssistantRecord = (rows: AssistantProfile[]): AssistantProfile => {
-          if (!selectedAssistantId) {
-            return rows[0];
-          }
-
-          return rows.find((item) => item.id === selectedAssistantId) ?? rows[0];
-        };
-
-        const selectedAssistant = resolveAssistantRecord(assistants);
-        const runtimeTarget =
-          selectedAssistant.langgraph_assistant_id || selectedAssistant.id;
-
-        if (selectedAssistant.id !== selectedAssistantId) {
-          setSelectedAssistantId(selectedAssistant.id);
-        }
-
-        if (runtimeTarget && runtimeTarget !== assistantId) {
-          setThreadId(null);
-          setAssistantId(runtimeTarget);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          logClient({
-            level: "warn",
-            event: "stream_scope_autolink_failed",
-            message: "Failed to auto-link chat target from project scope",
-            context: {
-              projectId,
-              selectedAssistantId,
-              error: String(error),
-            },
-          });
-        }
-      }
-    }
-
-    void syncExecutionTargetFromProjectScope();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, selectedAssistantId, assistantId, setSelectedAssistantId, setAssistantId, setThreadId]);
-
-  useEffect(() => {
-    if (!autoTokenEnabled) {
-      return;
-    }
-
-    let cancelled = false;
-    setAutoTokenReady(false);
-
-    fetchAutoToken().then((token) => {
-      if (cancelled) {
-        return;
-      }
-
-      if (token) {
-        setApiKey(token);
-        logClient({
-          level: "info",
-          event: "stream_auto_token_loaded",
-          message: "Loaded token in auto mode",
-        });
-      } else {
-        window.localStorage.removeItem("lg:chat:apiKey");
-        _setApiKey("");
-        logClient({
-          level: "warn",
-          event: "stream_auto_token_missing",
-          message: "Auto token unavailable; cleared cached api key",
-        });
-      }
-
-      setAutoTokenReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [autoTokenEnabled, setApiKey]);
-
-  useEffect(() => {
-    if (!autoTokenEnabled) {
-      return;
-    }
-
-    const id = window.setInterval(() => {
-      fetchAutoToken().then((token) => {
-        if (!token) {
-          return;
-        }
-        _setApiKey((prev) => {
-          if (prev === token) {
-            return prev;
-          }
-          window.localStorage.setItem("lg:chat:apiKey", token);
-          logClient({
-            level: "info",
-            event: "stream_auto_token_refreshed",
-            message: "Refreshed token in auto mode",
-          });
-          return token;
-        });
-      });
-    }, 5 * 60 * 1000);
-
-    return () => {
-      window.clearInterval(id);
-    };
-  }, [autoTokenEnabled]);
-
   // Determine final values to use, prioritizing URL params then env vars
   const normalizedApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
   const finalApiUrl = appendLangGraphApiPrefix(normalizedApiUrl);
   const finalAssistantId = assistantId || envAssistantId;
-
-  if (autoTokenEnabled && !autoTokenReady) {
-    return (
-      <div className="flex min-h-screen w-full items-center justify-center p-4">
-        <div className="text-muted-foreground text-sm">Loading authentication...</div>
-      </div>
-    );
-  }
 
   // Show the form if we: don't have an API URL, or don't have an assistant ID
   if (!finalApiUrl || !finalAssistantId) {
@@ -594,7 +421,6 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
       apiKey={apiKey}
       apiUrl={finalApiUrl}
       assistantId={finalAssistantId}
-      tenantId={tenantId}
       projectId={projectId}
       autoTokenEnabled={autoTokenEnabled}
     >

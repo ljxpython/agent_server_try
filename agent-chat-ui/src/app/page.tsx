@@ -1,9 +1,22 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+
+import { getOidcTokenSet } from "@/lib/oidc-storage";
+
 
 export default function Page() {
-  if ((process.env.NEXT_PUBLIC_OIDC_ENABLED ?? "false") === "true") {
-    redirect("/auth/login");
-  }
+  const router = useRouter();
 
-  redirect("/workspace/chat");
+  useEffect(() => {
+    const tokenSet = getOidcTokenSet();
+    if (tokenSet?.access_token) {
+      router.replace("/workspace/projects");
+      return;
+    }
+    router.replace("/auth/login");
+  }, [router]);
+
+  return null;
 }
