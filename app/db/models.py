@@ -84,6 +84,7 @@ class Agent(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     graph_id: Mapped[str] = mapped_column(String(128), nullable=False)
     runtime_base_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    langgraph_assistant_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 

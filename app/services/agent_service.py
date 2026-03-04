@@ -65,6 +65,7 @@ async def list_agents_for_project_id(
                     "name": a.name,
                     "graph_id": a.graph_id,
                     "runtime_base_url": a.runtime_base_url,
+                    "langgraph_assistant_id": a.langgraph_assistant_id,
                     "description": a.description,
                 }
                 for a in agents
@@ -80,6 +81,7 @@ async def create_agent_for_project(
     graph_id: str,
     runtime_base_url: str,
     description: str,
+    langgraph_assistant_id: str = "",
 ) -> dict[str, str]:
     acting_user_id = current_user_id_from_request(request)
     project_uuid = parse_uuid(project_id)
@@ -104,6 +106,7 @@ async def create_agent_for_project(
             graph_id=graph_id,
             runtime_base_url=runtime_base_url,
             description=description,
+            langgraph_assistant_id=langgraph_assistant_id or "",
         )
         client = openfga_client_from_request(request)
         if client is not None:
@@ -118,6 +121,7 @@ async def create_agent_for_project(
             "name": agent.name,
             "graph_id": agent.graph_id,
             "runtime_base_url": agent.runtime_base_url,
+            "langgraph_assistant_id": agent.langgraph_assistant_id,
             "description": agent.description,
         }
 
@@ -154,6 +158,7 @@ async def update_agent_by_id(
     graph_id: str,
     runtime_base_url: str,
     description: str,
+    langgraph_assistant_id: str = "",
 ) -> dict[str, str]:
     acting_user_id = current_user_id_from_request(request)
     agent_uuid = parse_uuid(agent_id)
@@ -181,6 +186,7 @@ async def update_agent_by_id(
             graph_id=graph_id,
             runtime_base_url=runtime_base_url,
             description=description,
+            langgraph_assistant_id=langgraph_assistant_id or "",
         )
         return {
             "id": str(updated.id),
@@ -188,5 +194,6 @@ async def update_agent_by_id(
             "name": updated.name,
             "graph_id": updated.graph_id,
             "runtime_base_url": updated.runtime_base_url,
+            "langgraph_assistant_id": updated.langgraph_assistant_id,
             "description": updated.description,
         }

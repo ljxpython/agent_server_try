@@ -100,6 +100,7 @@ class AssistantResponse(BaseModel):
     name: str
     graph_id: str
     runtime_base_url: str
+    langgraph_assistant_id: str
     description: str
 
 

@@ -216,6 +216,7 @@ def create_agent(
     graph_id: str,
     runtime_base_url: str,
     description: str,
+    langgraph_assistant_id: str = "",
 ) -> Agent:
     agent = Agent(
         project_id=project_id,
@@ -223,6 +224,7 @@ def create_agent(
         graph_id=graph_id,
         runtime_base_url=runtime_base_url,
         description=description,
+        langgraph_assistant_id=langgraph_assistant_id,
     )
     session.add(agent)
     session.flush()
@@ -236,11 +238,13 @@ def update_agent(
     graph_id: str,
     runtime_base_url: str,
     description: str,
+    langgraph_assistant_id: str = "",
 ) -> Agent:
     agent.name = name
     agent.graph_id = graph_id
     agent.runtime_base_url = runtime_base_url
     agent.description = description
+    agent.langgraph_assistant_id = langgraph_assistant_id
     session.flush()
     return agent
 
