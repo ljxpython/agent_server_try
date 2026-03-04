@@ -27,7 +27,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { getApiKey } from "@/lib/api-key";
 import { logClient } from "@/lib/client-logger";
 import { listAssistants } from "@/lib/platform-api/assistants";
-import { listEnvironmentMappings } from "@/lib/platform-api/environment-mappings";
+import type { AssistantProfile } from "@/lib/platform-api/types";
 import { isJwtToken } from "@/lib/token";
 import { useThreads } from "./Thread";
 import { useWorkspaceContext } from "./WorkspaceContext";
@@ -152,19 +152,15 @@ const StreamSession = ({
   }, [apiKey, runtimeHeaders, autoTokenEnabled]);
 
   const statusHeaders = useMemo<Record<string, string>>(() => {
+    const headers: Record<string, string> = {};
+
     if (isJwtToken(apiKey)) {
-      return {
-        Authorization: `Bearer ${apiKey}`,
-      };
+      headers.Authorization = `Bearer ${apiKey}`;
+    } else if (apiKey && !autoTokenEnabled) {
+      headers["X-Api-Key"] = apiKey;
     }
 
-    if (apiKey && !autoTokenEnabled) {
-      return {
-        "X-Api-Key": apiKey,
-      };
-    }
-
-    return {};
+    return headers;
   }, [apiKey, autoTokenEnabled]);
 
   const streamApiKey = isJwtToken(apiKey) ? undefined : apiKey ?? undefined;
@@ -174,7 +170,7 @@ const StreamSession = ({
     apiKey: streamApiKey,
     defaultHeaders: authHeaders,
     assistantId,
-    threadId: threadId ?? null,
+    threadId: threadId || null,
     fetchStateHistory: true,
     onCustomEvent: (event, options) => {
       if (isUIMessage(event) || isRemoveUIMessage(event)) {
@@ -250,13 +246,25 @@ const StreamSession = ({
 // Default values for the form
 const DEFAULT_API_URL = "http://localhost:2024";
 const DEFAULT_ASSISTANT_ID = "assistant";
-const DEFAULT_RUNTIME_ENV = process.env.NEXT_PUBLIC_RUNTIME_ENV ?? "dev";
 
 function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
   if (apiUrl.includes(":8123")) {
     return fallbackApiUrl || DEFAULT_API_URL;
   }
   return apiUrl;
+}
+
+function appendLangGraphApiPrefix(apiUrl: string): string {
+  if (!apiUrl) {
+    return apiUrl;
+  }
+
+  const normalizedBase = apiUrl.replace(/\/+$/, "");
+  if (normalizedBase.endsWith("/api/langgraph")) {
+    return normalizedBase;
+  }
+
+  return `${normalizedBase}/api/langgraph`;
 }
 
 export const StreamProvider: FC<{ children: ReactNode }> = ({
@@ -278,6 +286,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   const [assistantId, setAssistantId] = useQueryState("assistantId", {
     defaultValue: envAssistantId || "",
   });
+  const [, setThreadId] = useQueryState("threadId");
 
   const [apiKey, _setApiKey] = useState(() => {
     if (autoTokenEnabled) {
@@ -339,37 +348,34 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
       }
 
       try {
-        let resolvedAssistantId = selectedAssistantId;
-        let resolvedGraphId: string | null = null;
-
-        if (!resolvedAssistantId) {
-          const assistants = await listAssistants(projectId, { limit: 1, sortBy: "created_at", sortOrder: "desc" });
-          if (cancelled || assistants.length === 0) {
-            return;
-          }
-          resolvedAssistantId = assistants[0].id;
-          resolvedGraphId = assistants[0].graph_id;
-          setSelectedAssistantId(resolvedAssistantId);
-        }
-
-        const bindings = await listEnvironmentMappings(resolvedAssistantId, {
+        const assistants = await listAssistants(projectId, {
           limit: 100,
-          sortBy: "environment",
-          sortOrder: "asc",
+          sortBy: "created_at",
+          sortOrder: "desc",
         });
-        if (cancelled) {
+        if (cancelled || assistants.length === 0) {
           return;
         }
 
-        const preferredBinding =
-          bindings.find((item) => item.environment === DEFAULT_RUNTIME_ENV) ?? bindings[0] ?? null;
+        const resolveAssistantRecord = (rows: AssistantProfile[]): AssistantProfile => {
+          if (!selectedAssistantId) {
+            return rows[0];
+          }
 
-        if (preferredBinding) {
-          resolvedGraphId = preferredBinding.langgraph_assistant_id;
+          return rows.find((item) => item.id === selectedAssistantId) ?? rows[0];
+        };
+
+        const selectedAssistant = resolveAssistantRecord(assistants);
+        const runtimeTarget =
+          selectedAssistant.langgraph_assistant_id || selectedAssistant.id;
+
+        if (selectedAssistant.id !== selectedAssistantId) {
+          setSelectedAssistantId(selectedAssistant.id);
         }
 
-        if (resolvedGraphId && resolvedGraphId !== assistantId) {
-          setAssistantId(resolvedGraphId);
+        if (runtimeTarget && runtimeTarget !== assistantId) {
+          setThreadId(null);
+          setAssistantId(runtimeTarget);
         }
       } catch (error) {
         if (!cancelled) {
@@ -392,7 +398,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
     return () => {
       cancelled = true;
     };
-  }, [projectId, selectedAssistantId, assistantId, setSelectedAssistantId, setAssistantId]);
+  }, [projectId, selectedAssistantId, assistantId, setSelectedAssistantId, setAssistantId, setThreadId]);
 
   useEffect(() => {
     if (!autoTokenEnabled) {
@@ -463,7 +469,8 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   }, [autoTokenEnabled]);
 
   // Determine final values to use, prioritizing URL params then env vars
-  const finalApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
+  const normalizedApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
+  const finalApiUrl = appendLangGraphApiPrefix(normalizedApiUrl);
   const finalAssistantId = assistantId || envAssistantId;
 
   if (autoTokenEnabled && !autoTokenReady) {

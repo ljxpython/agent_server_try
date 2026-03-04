@@ -131,9 +131,9 @@ export function AssistantMessage({
     message.tool_calls.length > 0;
   const toolCallsHaveContents =
     hasToolCalls &&
-    message.tool_calls.some(
+    (message.tool_calls?.some(
       (tc) => tc.args && Object.keys(tc.args).length > 0,
-    );
+    ) ?? false);
   const hasAnthropicToolCalls = !!anthropicStreamedToolCalls?.length;
   const isToolResult = message?.type === "tool";
 

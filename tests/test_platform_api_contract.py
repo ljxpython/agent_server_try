@@ -17,7 +17,7 @@ def test_list_tenants_sets_total_count_header(monkeypatch):
     async def fake_list_my_tenants(request, limit, offset, sort_by, sort_order):
         return ([{"id": "t1", "name": "Tenant A", "slug": "tenant-a", "status": "active"}], 7)
 
-    monkeypatch.setattr("app.api.platform.list_my_tenants", fake_list_my_tenants)
+    monkeypatch.setattr("app.api.platform.tenants.list_my_tenants", fake_list_my_tenants)
 
     with _build_client() as client:
         resp = client.get("/_platform/tenants")
@@ -36,7 +36,7 @@ def test_export_audit_logs_keeps_csv_contract(monkeypatch):
     async def fake_export(*args, **kwargs):
         return csv_text, "audit_logs_t1.csv"
 
-    monkeypatch.setattr("app.api.platform.export_tenant_audit_logs_csv", fake_export)
+    monkeypatch.setattr("app.api.platform.audit.export_tenant_audit_logs_csv", fake_export)
 
     with _build_client() as client:
         resp = client.get("/_platform/tenants/t1/audit-logs/export")
@@ -73,7 +73,7 @@ def test_query_audit_logs_response_shape(monkeypatch):
             ],
         }
 
-    monkeypatch.setattr("app.api.platform.query_tenant_audit_logs_data", fake_query)
+    monkeypatch.setattr("app.api.platform.audit.query_tenant_audit_logs_data", fake_query)
 
     with _build_client() as client:
         resp = client.get("/_platform/tenants/t1/audit-logs")
@@ -88,7 +88,7 @@ def test_delete_agent_404_contract(monkeypatch):
     async def fake_delete_agent(*args, **kwargs):
         raise HTTPException(status_code=404, detail="Assistant not found")
 
-    monkeypatch.setattr("app.api.platform.delete_agent_by_id", fake_delete_agent)
+    monkeypatch.setattr("app.api.platform.assistants.delete_agent_by_id", fake_delete_agent)
 
     with _build_client() as client:
         resp = client.delete("/_platform/assistants/a1")
@@ -101,13 +101,51 @@ def test_delete_project_400_contract(monkeypatch):
     async def fake_delete_project(*args, **kwargs):
         raise HTTPException(status_code=400, detail="Invalid project_id")
 
-    monkeypatch.setattr("app.api.platform.delete_project_by_id", fake_delete_project)
+    monkeypatch.setattr("app.api.platform.projects.delete_project_by_id", fake_delete_project)
 
     with _build_client() as client:
         resp = client.delete("/_platform/projects/bad-project")
 
     assert resp.status_code == 400
     assert resp.json()["detail"] == "Invalid project_id"
+
+
+def test_delete_tenant_404_contract(monkeypatch):
+    async def fake_delete_tenant(*args, **kwargs):
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    monkeypatch.setattr("app.api.platform.tenants.delete_tenant_by_ref", fake_delete_tenant)
+
+    with _build_client() as client:
+        resp = client.delete("/_platform/tenants/not-exist")
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Tenant not found"
+
+
+def test_list_memberships_sets_total_count_header(monkeypatch):
+    async def fake_list_memberships(*args, **kwargs):
+        return (
+            [
+                {
+                    "tenant_id": "t1",
+                    "user_id": "u1",
+                    "external_subject": "sub-1",
+                    "email": "u1@example.com",
+                    "role": "admin",
+                }
+            ],
+            3,
+        )
+
+    monkeypatch.setattr("app.api.platform.tenants.list_memberships_for_tenant_ref", fake_list_memberships)
+
+    with _build_client() as client:
+        resp = client.get("/_platform/tenants/t1/memberships")
+
+    assert resp.status_code == 200
+    assert resp.headers["x-total-count"] == "3"
+    assert resp.json()[0]["role"] == "admin"
 
 
 def test_update_project_contract(monkeypatch):
@@ -118,7 +156,7 @@ def test_update_project_contract(monkeypatch):
             "name": "Project Renamed",
         }
 
-    monkeypatch.setattr("app.api.platform.update_project_by_id", fake_update_project)
+    monkeypatch.setattr("app.api.platform.projects.update_project_by_id", fake_update_project)
 
     payload = {"name": "Project Renamed"}
     with _build_client() as client:
@@ -136,7 +174,7 @@ def test_create_agent_403_contract(monkeypatch):
     async def fake_create_agent(*args, **kwargs):
         raise HTTPException(status_code=403, detail="Only owner/admin can perform this action")
 
-    monkeypatch.setattr("app.api.platform.create_agent_for_project", fake_create_agent)
+    monkeypatch.setattr("app.api.platform.assistants.create_agent_for_project", fake_create_agent)
 
     payload = {
         "project_id": "p1",
@@ -160,10 +198,11 @@ def test_update_agent_contract(monkeypatch):
             "name": "Updated Agent",
             "graph_id": "updated-graph",
             "runtime_base_url": "http://runtime.updated",
+            "langgraph_assistant_id": "lg-assistant-1",
             "description": "updated",
         }
 
-    monkeypatch.setattr("app.api.platform.update_agent_by_id", fake_update_agent)
+    monkeypatch.setattr("app.api.platform.assistants.update_agent_by_id", fake_update_agent)
 
     payload = {
         "name": "Updated Agent",
@@ -176,16 +215,3 @@ def test_update_agent_contract(monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json()["name"] == "Updated Agent"
-
-
-def test_delete_runtime_binding_404_contract(monkeypatch):
-    async def fake_delete_binding(*args, **kwargs):
-        raise HTTPException(status_code=404, detail="Environment mapping not found")
-
-    monkeypatch.setattr("app.api.platform.delete_runtime_binding_by_id", fake_delete_binding)
-
-    with _build_client() as client:
-        resp = client.delete("/_platform/assistants/agent-1/environment-mappings/binding-1")
-
-    assert resp.status_code == 404
-    assert resp.json()["detail"] == "Environment mapping not found"

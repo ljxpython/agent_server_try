@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 export function ScopeSwitcher() {
@@ -48,6 +50,24 @@ export function ScopeSwitcher() {
           ))}
         </select>
       </label>
+
+      {!loading && tenants.length === 0 ? (
+        <Link
+          href="/workspace/tenants"
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/50"
+        >
+          Create tenant
+        </Link>
+      ) : null}
+
+      {!loading && Boolean(tenantId) ? (
+        <Link
+          href={`/workspace/tenants/${tenantId}/members`}
+          className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm font-medium hover:bg-muted/50"
+        >
+          Memberships
+        </Link>
+      ) : null}
     </div>
   );
 }

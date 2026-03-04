@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
+from app.services.langgraph_sdk.scope_guard import assert_assistant_belongs_project, assert_thread_belongs_project
 from app.services.langgraph_sdk.runs_service import LangGraphRunsService
 
 router = APIRouter()
@@ -64,6 +65,7 @@ async def create_run(request: Request, payload: dict[str, Any] = Body(...)) -> A
     - 返回上游 create run 的结果对象，并通过 jsonable_encoder 序列化。
     """
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
     run = await service.create_global(payload)
     return jsonable_encoder(run)
@@ -82,6 +84,7 @@ async def stream_run(request: Request, payload: dict[str, Any] = Body(...)) -> S
     - 返回 text/event-stream；逐条消费 SDK 迭代器并输出 SSE chunk。
     """
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
     event_iter = await service.stream_global(payload)
     return StreamingResponse(_sse_stream(event_iter), media_type="text/event-stream")
@@ -100,6 +103,7 @@ async def wait_run(request: Request, payload: dict[str, Any] = Body(...)) -> Any
     - 返回上游 wait 结果对象，并通过 jsonable_encoder 序列化。
     """
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
     result = await service.wait_global(payload)
     return jsonable_encoder(result)
@@ -169,6 +173,7 @@ async def create_cron(request: Request, payload: dict[str, Any] = Body(...)) -> 
     - 返回上游 cron 创建结果，并通过 jsonable_encoder 序列化。
     """
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
     cron = await service.create_cron(payload)
     return jsonable_encoder(cron)
@@ -263,9 +268,17 @@ async def create_thread_run(
     返回语义：
     - 返回上游 create run 的结果对象，并通过 jsonable_encoder 序列化。
     """
+    await assert_thread_belongs_project(request, thread_id)
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
-    run = await service.create(thread_id, payload)
+    try:
+        run = await service.create(thread_id, payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # 仅兜底未预期异常，避免上游故障直接泄露为 500。
+        raise HTTPException(status_code=502, detail="langgraph_run_request_failed") from exc
     return jsonable_encoder(run)
 
 
@@ -286,9 +299,17 @@ async def stream_thread_run(
     返回语义：
     - 返回 text/event-stream；逐条消费 SDK 迭代器并输出 SSE chunk。
     """
+    await assert_thread_belongs_project(request, thread_id)
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
-    event_iter = await service.stream(thread_id, payload)
+    try:
+        event_iter = await service.stream(thread_id, payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # 流式请求单独返回 stream_failed，便于前端识别错误类型。
+        raise HTTPException(status_code=502, detail="langgraph_run_stream_failed") from exc
     return StreamingResponse(_sse_stream(event_iter), media_type="text/event-stream")
 
 
@@ -309,9 +330,17 @@ async def wait_thread_run(
     返回语义：
     - 返回上游 wait 结果对象，并通过 jsonable_encoder 序列化。
     """
+    await assert_thread_belongs_project(request, thread_id)
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
-    result = await service.wait(thread_id, payload)
+    try:
+        result = await service.wait(thread_id, payload)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        # wait 与 create 共享请求失败错误码，保持调用侧处理一致。
+        raise HTTPException(status_code=502, detail="langgraph_run_request_failed") from exc
     return jsonable_encoder(result)
 
 
@@ -328,6 +357,7 @@ async def get_thread_run(request: Request, thread_id: str, run_id: str) -> Any:
     返回语义：
     - 返回 run 详情对象，并通过 jsonable_encoder 序列化。
     """
+    await assert_thread_belongs_project(request, thread_id)
     service = LangGraphRunsService(request)
     run = await service.get(thread_id, run_id)
     return jsonable_encoder(run)
@@ -356,6 +386,7 @@ async def list_thread_runs(
     返回语义：
     - 返回上游 run 列表结果，并通过 jsonable_encoder 序列化。
     """
+    await assert_thread_belongs_project(request, thread_id)
     query_payload: dict[str, Any] = {}
     if limit is not None:
         query_payload["limit"] = limit
@@ -385,6 +416,7 @@ async def delete_thread_run(request: Request, thread_id: str, run_id: str) -> An
     - 若上游返回 None，则返回 {"ok": true} 语义。
     - 若上游返回对象，则原样序列化返回。
     """
+    await assert_thread_belongs_project(request, thread_id)
     service = LangGraphRunsService(request)
     result = await service.delete(thread_id, run_id)
     if result is None:
@@ -405,6 +437,7 @@ async def join_thread_run(request: Request, thread_id: str, run_id: str) -> Any:
     返回语义：
     - 返回上游 join 结果对象，并通过 jsonable_encoder 序列化。
     """
+    await assert_thread_belongs_project(request, thread_id)
     service = LangGraphRunsService(request)
     result = await service.join(thread_id, run_id)
     return jsonable_encoder(result)
@@ -427,7 +460,9 @@ async def create_thread_run_cron(
     返回语义：
     - 返回上游 create_for_thread 结果，并通过 jsonable_encoder 序列化。
     """
+    await assert_thread_belongs_project(request, thread_id)
     _require_assistant_id(payload)
+    await assert_assistant_belongs_project(request, payload["assistant_id"])
     service = LangGraphRunsService(request)
     cron = await service.create_cron_for_thread(thread_id, payload)
     return jsonable_encoder(cron)
@@ -453,6 +488,7 @@ async def cancel_thread_run(
     - 若上游返回对象，则原样序列化返回。
     - 若上游返回 None，则返回 {"ok": true} 语义。
     """
+    await assert_thread_belongs_project(request, thread_id)
     if payload is not None and not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="payload must be object")
 
@@ -486,6 +522,7 @@ async def join_thread_run_stream(
     返回语义：
     - 返回 text/event-stream；逐条消费 SDK join_stream 迭代器并输出 SSE chunk。
     """
+    await assert_thread_belongs_project(request, thread_id)
     stream_payload: dict[str, Any] = {}
     if cancel_on_disconnect is not None:
         stream_payload["cancel_on_disconnect"] = cancel_on_disconnect

@@ -99,6 +99,7 @@ curl http://127.0.0.1:2024/_proxy/health
 - `docs/langgraph-official-usage.md`
 - `docs/platform-api.md`
 - `docs/openfga-integration.md`
+- `docs/auth-tenant-project-flow.md`
 
 ## Environment templates
 

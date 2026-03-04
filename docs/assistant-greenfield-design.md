@@ -408,6 +408,20 @@
 - 移除历史 `graph_id/runtime_base_url` 作为前端运行时输入语义。
 - 保留必要迁移窗口后，移除兼容分支。
 
+## Assistant 接口收敛策略（避免多套接口长期并存）
+
+- 目标长期形态只保留两层：
+  - 控制面：`/_platform/assistants*`（项目内创建/管理/权限/审计）
+  - 同构运行面：`/api/langgraph/assistants*`（LangGraph 1:1 契约）
+- 旧兼容层 `/api/assistants*` 仅作迁移过渡，不再新增能力。
+
+### 分阶段收敛
+
+1. 冻结旧兼容接口：`/api/assistants*` 只保留兼容，不再扩展。
+2. 替代能力就绪：`/_platform/*` 覆盖管理场景，`/api/langgraph/*` 覆盖同构场景。
+3. 前端全面切换：管理调用 `/_platform/*`，运行调用 `/api/langgraph/*`。
+4. 下线旧兼容层：先返回弃用信号，再删除路由与实现。
+
 ## MVP 落地清单（已确认）
 
 ### P0（必须）
@@ -429,3 +443,84 @@
 - 跨项目 assistant/thread 调用被拒绝且有审计记录。
 - 合法动态参数可生效，非法动态参数被过滤或拒绝。
 - 重试创建请求不产生重复 assistant（幂等生效）。
+
+## 整体联调清单（当前阶段）
+
+### A. 控制面联调（`/_platform/*`）
+
+- `POST /_platform/assistants`：创建 assistant 后响应必须包含 `langgraph_assistant_id`。
+- `GET /_platform/projects/{project_id}/assistants`：列表返回 `langgraph_assistant_id`，前端可直接用于运行目标解析。
+- `PATCH /_platform/assistants/{assistant_id}`：更新后 `langgraph_assistant_id` 不应被空值覆盖。
+- `DELETE /_platform/assistants/{assistant_id}`：若存在 canonical id，需先同步删除 LangGraph assistant。
+
+### B. 运行面联调（`/api/langgraph/*`）
+
+- 所有带 `assistant_id` 的运行请求：必须校验 assistant 属于当前 `x-project-id`。
+- 所有 thread-scoped 请求：必须校验 thread metadata 中项目归属与 `x-project-id` 一致。
+- `threads/search` 与 `threads/count`：请求 metadata 自动注入 `project_id`。
+- 归属失败统一返回：
+  - `403 assistant_project_denied`
+  - `403 thread_project_denied`
+
+### C. 前端联调（`agent-chat-ui`）
+
+- `WorkspaceContext` 仅使用单一 query key：`assistantId`。
+- `Stream` 不再调用 environment-mappings API；运行目标取 `assistant.langgraph_assistant_id || assistant.id`。
+- 运行调用统一走平台同构前缀：`/api/langgraph/*`。
+- `runtime-bindings` 页面为只读下线提示；导航中移除 Environments 入口。
+
+### D. 验收命令（最小）
+
+- 后端：
+  - `python3 -m py_compile app/services/agent_service.py app/services/langgraph_sdk/scope_guard.py app/api/langgraph/threads.py app/api/langgraph/runs.py`
+- 前端：
+  - `cd agent-chat-ui && pnpm lint`
+
+### E. 手工验证路径
+
+1. 选择 tenant/project，创建 assistant。
+2. 确认 assistants 列表出现 `langgraph_assistant_id`。
+3. 进入 chat 发起对话（create thread + run stream）。
+4. 切换到无权限项目或构造错误 project header，确认收到 403 归属错误。
+5. 删除 assistant，确认控制面与 LangGraph 侧对象一致清理。
+
+## 故障记录：`/_platform/projects/{project_id}/assistants` 返回 500
+
+### 现象
+
+- 请求示例：`GET /_platform/projects/<project_id>/assistants?limit=20&offset=0&sort_by=created_at&sort_order=desc`
+- 日志现象：`500 Internal Server Error`
+
+### 根因
+
+- 代码已引入 `agents.langgraph_assistant_id` 字段（Step 1），但数据库表结构未同步。
+- `agents` 表缺少 `langgraph_assistant_id` 列时，控制面查询/序列化会触发 SQL 错误并表现为 500。
+
+### 修复方式
+
+1. 新增 Alembic 迁移：
+   - `migrations/versions/20260304_0004_add_agents_langgraph_assistant_id.py`
+2. 迁移内容：
+   - `ALTER TABLE agents ADD COLUMN IF NOT EXISTS langgraph_assistant_id VARCHAR(128) NOT NULL DEFAULT ''`
+   - `CREATE INDEX IF NOT EXISTS ix_agents_langgraph_assistant_id ON agents(langgraph_assistant_id)`
+
+### 数据库迁移命令
+
+> 说明：当前 Alembic 环境要求显式提供 `DATABASE_URL`。
+
+```bash
+DATABASE_URL="$(python3 - <<'PY'
+from pathlib import Path
+for line in Path('.env').read_text().splitlines():
+    if line.startswith('DATABASE_URL='):
+        print(line.split('=',1)[1])
+        break
+PY
+)" uv run alembic upgrade head
+```
+
+### 验证方式
+
+1. 校验列存在（`agents` 表应包含 `langgraph_assistant_id`）。
+2. 重新请求 `/_platform/projects/{project_id}/assistants`，确认不再出现 500。
+3. 若服务已运行，建议重启后复测。

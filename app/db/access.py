@@ -119,6 +119,25 @@ def list_tenants_for_user(
     return rows, total
 
 
+def list_memberships_for_tenant(
+    session: Session,
+    tenant_id: uuid.UUID,
+    limit: int = 200,
+    offset: int = 0,
+) -> tuple[list[Membership], int]:
+    base_stmt = select(Membership).where(Membership.tenant_id == tenant_id)
+    stmt = base_stmt.order_by(Membership.created_at.desc()).offset(offset).limit(limit)
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    rows = list(session.scalars(stmt).all())
+    total = int(session.scalar(count_stmt) or 0)
+    return rows, total
+
+
+def delete_tenant(session: Session, tenant: Tenant) -> None:
+    session.delete(tenant)
+    session.flush()
+
+
 def list_projects_for_tenant(
     session: Session,
     tenant_id: uuid.UUID,
@@ -182,6 +201,18 @@ def get_agent(session: Session, agent_id: uuid.UUID) -> Agent | None:
     return session.get(Agent, agent_id)
 
 
+def get_agent_by_project_and_langgraph_assistant_id(
+    session: Session,
+    project_id: uuid.UUID,
+    langgraph_assistant_id: str,
+) -> Agent | None:
+    stmt = select(Agent).where(
+        Agent.project_id == project_id,
+        Agent.langgraph_assistant_id == langgraph_assistant_id,
+    )
+    return session.scalar(stmt)
+
+
 def get_agent_with_project(session: Session, agent_id: uuid.UUID) -> tuple[Agent, Project] | None:
     stmt = (
         select(Agent, Project)
@@ -218,13 +249,14 @@ def create_agent(
     description: str,
     langgraph_assistant_id: str = "",
 ) -> Agent:
+    assistant_id = langgraph_assistant_id or ""
     agent = Agent(
         project_id=project_id,
         name=name,
         graph_id=graph_id,
         runtime_base_url=runtime_base_url,
         description=description,
-        langgraph_assistant_id=langgraph_assistant_id or "",
+        langgraph_assistant_id=assistant_id,
     )
     session.add(agent)
     session.flush()
@@ -240,11 +272,12 @@ def update_agent(
     description: str,
     langgraph_assistant_id: str = "",
 ) -> Agent:
+    assistant_id = langgraph_assistant_id or ""
     agent.name = name
     agent.graph_id = graph_id
     agent.runtime_base_url = runtime_base_url
     agent.description = description
-    agent.langgraph_assistant_id = langgraph_assistant_id or ""
+    agent.langgraph_assistant_id = assistant_id
     session.flush()
     return agent
 

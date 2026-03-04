@@ -10,6 +10,7 @@ from app.db.access import (
     get_membership,
     get_user_by_external_subject,
     get_user_by_id,
+    list_memberships_for_tenant,
     parse_uuid,
     upsert_user_from_subject,
 )
@@ -19,6 +20,7 @@ from app.services.platform_common import (
     db_session_factory_from_request,
     remove_tenant_membership_fga,
     require_tenant_admin,
+    require_tenant_membership,
     resolve_tenant_or_404,
     sync_tenant_membership_fga,
 )
@@ -82,6 +84,40 @@ async def add_membership_to_tenant(
             "user_id": str(membership.user_id),
             "role": membership.role,
         }
+
+
+async def list_memberships_for_tenant_ref(
+    request: Request,
+    tenant_ref: str,
+    limit: int,
+    offset: int,
+) -> tuple[list[dict[str, str]], int]:
+    acting_user_id = current_user_id_from_request(request)
+    session_factory = db_session_factory_from_request(request)
+
+    with session_scope(session_factory) as session:
+        tenant = resolve_tenant_or_404(session, tenant_ref)
+        require_tenant_membership(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
+
+        rows, total = list_memberships_for_tenant(session, tenant_id=tenant.id, limit=limit, offset=offset)
+        return (
+            [
+                {
+                    "tenant_id": str(item.tenant_id),
+                    "user_id": str(item.user_id),
+                    "external_subject": str(item.user.external_subject),
+                    "email": str(item.user.email),
+                    "role": str(item.role),
+                }
+                for item in rows
+            ],
+            total,
+        )
 
 
 async def remove_membership_from_tenant(request: Request, tenant_ref: str, user_ref: str) -> dict[str, Any]:

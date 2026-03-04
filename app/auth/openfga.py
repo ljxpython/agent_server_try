@@ -11,6 +11,13 @@ import httpx
 logger = logging.getLogger("proxy.openfga")
 
 
+def is_tuple_already_exists_error(status_code: int, response_text: str) -> bool:
+    if status_code != 400:
+        return False
+    lower_text = response_text.lower()
+    return "cannot write" in lower_text and "already exists" in lower_text
+
+
 @dataclass(frozen=True)
 class OpenFgaSettings:
     enabled: bool
@@ -97,14 +104,24 @@ class OpenFgaClient:
             f"{self.base_url}/stores/{self.store_id}/write",
             json=payload,
         )
-        if response.status_code not in {200, 201}:
-            logger.error(
-                "openfga_write_tuple_failed status=%s tuple_count=%s body=%s",
-                response.status_code,
-                len(tuples),
-                response.text,
-            )
-            raise RuntimeError(f"OpenFGA write tuple failed: {response.status_code} {response.text}")
+        if response.status_code in {200, 201}:
+            return
+
+        if is_tuple_already_exists_error(response.status_code, response.text):
+            if len(tuples) == 1:
+                return
+
+            for tuple_key in tuples:
+                await self.write_tuples([tuple_key])
+            return
+
+        logger.error(
+            "openfga_write_tuple_failed status=%s tuple_count=%s body=%s",
+            response.status_code,
+            len(tuples),
+            response.text,
+        )
+        raise RuntimeError(f"OpenFGA write tuple failed: {response.status_code} {response.text}")
 
     async def delete_tuples(self, tuples: list[dict[str, str]]) -> None:
         if not tuples:

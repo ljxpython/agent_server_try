@@ -84,7 +84,7 @@ class Agent(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     graph_id: Mapped[str] = mapped_column(String(128), nullable=False)
     runtime_base_url: Mapped[str] = mapped_column(String(512), nullable=False)
-    # 控制面语义收敛：保留兼容字段，同时引入规范 assistant 标识。
+    # 收敛到规范 assistant 标识，同时兼容保留 graph_id/runtime_base_url。
     langgraph_assistant_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

@@ -34,7 +34,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [projectId, setProjectId] = useQueryState("projectId", {
     defaultValue: process.env.NEXT_PUBLIC_PROJECT_ID ?? "",
   });
-  const [assistantId, setAssistantId] = useQueryState("assistantProfileId", {
+  const [assistantId, setAssistantId] = useQueryState("assistantId", {
     defaultValue: "",
   });
   const [, setThreadId] = useQueryState("threadId", {
@@ -155,13 +155,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setTenantId: (value: string) => {
         setTenantId(value);
         setProjectId("");
-        setThreadId("");
+        setThreadId(null);
         setAssistantId("");
       },
       projectId: projectId ?? "",
       setProjectId: (value: string) => {
         setProjectId(value);
-        setThreadId("");
+        setThreadId(null);
         setAssistantId("");
       },
       assistantId: assistantId ?? "",

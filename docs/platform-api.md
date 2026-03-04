@@ -17,16 +17,14 @@
 - `GET /_platform/projects/{project_id}/assistants`：查询项目下 assistant profile（有 membership 即可）
 - `POST /_platform/assistants`：创建 assistant profile（仅 `owner/admin`）
 - `DELETE /_platform/assistants/{assistant_id}`：删除 assistant profile（仅 `owner/admin`）
-- `GET /_platform/assistants/{assistant_id}/environment-mappings`：查询环境映射（有 membership 即可）
-- `POST /_platform/assistants/{assistant_id}/environment-mappings`：创建/更新环境映射（仅 `owner/admin`）
 - `GET /_platform/tenants/{tenant_ref}/audit-logs`：查询租户审计日志（仅 `owner/admin`）
 - `GET /_platform/tenants/{tenant_ref}/audit-logs/stats`：审计聚合统计（仅 `owner/admin`）
 - `GET /_platform/tenants/{tenant_ref}/audit-logs/export`：导出审计日志 CSV（仅 `owner/admin`）
 
 ## 角色权限矩阵
 
-- `owner/admin`：可读写租户、项目、assistant profile、environment mapping、membership。
-- `member`：只读（可看租户、项目、assistant profile、environment mapping），不可写。
+- `owner/admin`：可读写租户、项目、assistant profile、membership。
+- `member`：只读（可看租户、项目、assistant profile），不可写。
 
 ## 分页与排序规范
 
@@ -96,16 +94,7 @@ curl -sS -X POST "http://127.0.0.1:2024/_platform/assistants" \
   -d '{"project_id":"<project-id>","name":"Agent A","graph_id":"graph-agent-a","runtime_base_url":"http://127.0.0.1:8123","description":"demo"}'
 ```
 
-### 7) 创建 environment mapping（owner/admin）
-
-```bash
-curl -sS -X POST "http://127.0.0.1:2024/_platform/assistants/<assistant-id>/environment-mappings" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"environment":"dev","langgraph_assistant_id":"assistant-dev-a","langgraph_graph_id":"graph-agent-a","runtime_base_url":"http://127.0.0.1:8123"}'
-```
-
-### 8) 查询审计日志（owner/admin）
+### 7) 查询审计日志（owner/admin）
 
 ```bash
 curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs?limit=50&offset=0&plane=runtime_proxy" \
@@ -122,7 +111,7 @@ curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs
 - `from_time=<ISO8601>`
 - `to_time=<ISO8601>`
 
-### 9) 查询审计聚合统计（owner/admin）
+### 8) 查询审计聚合统计（owner/admin）
 
 ```bash
 curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs/stats?by=path&limit=20" \
@@ -136,7 +125,7 @@ curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs
 - `by=user_id`
 - `by=plane`
 
-### 10) 导出审计日志 CSV（owner/admin）
+### 9) 导出审计日志 CSV（owner/admin）
 
 ```bash
 curl -sS "http://127.0.0.1:2024/_platform/tenants/<tenant-id-or-slug>/audit-logs/export?max_rows=5000" \

@@ -3,12 +3,25 @@ from __future__ import annotations
 from fastapi import HTTPException, Request
 from sqlalchemy.exc import IntegrityError
 
-from app.db.access import create_or_update_membership, create_tenant, list_tenants_for_user
+from app.db.access import (
+    create_or_update_membership,
+    create_tenant,
+    delete_tenant,
+    list_agents_for_tenant,
+    list_memberships_for_tenant,
+    list_projects_for_tenant,
+    list_tenants_for_user,
+)
 from app.db.session import session_scope
 from app.services.platform_common import (
     current_user_id_from_request,
     db_session_factory_from_request,
     logger,
+    remove_agent_fga,
+    remove_project_fga,
+    remove_tenant_membership_fga,
+    require_tenant_admin,
+    resolve_tenant_or_404,
     slugify,
     sync_tenant_membership_fga,
 )
@@ -86,4 +99,42 @@ async def create_tenant_for_current_user(
             "name": tenant.name,
             "slug": tenant.slug,
             "status": tenant.status,
+        }
+
+
+async def delete_tenant_by_ref(request: Request, tenant_ref: str) -> dict[str, str | bool]:
+    acting_user_id = current_user_id_from_request(request)
+    session_factory = db_session_factory_from_request(request)
+
+    with session_scope(session_factory) as session:
+        tenant = resolve_tenant_or_404(session, tenant_ref)
+        require_tenant_admin(
+            session,
+            tenant_id=tenant.id,
+            acting_user_id=acting_user_id,
+            request=request,
+        )
+
+        membership_rows, _ = list_memberships_for_tenant(session, tenant_id=tenant.id, limit=5000, offset=0)
+        projects, _ = list_projects_for_tenant(session, tenant_id=tenant.id, limit=5000, offset=0)
+        agents = list_agents_for_tenant(session, tenant_id=tenant.id)
+
+        for membership in membership_rows:
+            await remove_tenant_membership_fga(
+                request,
+                tenant_id=str(tenant.id),
+                user_subject=membership.user.external_subject,
+            )
+
+        for project in projects:
+            for agent in agents:
+                if agent.project_id == project.id:
+                    await remove_agent_fga(request, agent_id=str(agent.id), project_id=str(project.id))
+            await remove_project_fga(request, project_id=str(project.id), tenant_id=str(tenant.id))
+
+        tenant_id = str(tenant.id)
+        delete_tenant(session, tenant)
+        return {
+            "deleted": True,
+            "tenant_id": tenant_id,
         }

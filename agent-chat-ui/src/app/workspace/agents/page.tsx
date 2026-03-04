@@ -125,7 +125,7 @@ export default function AgentsPage() {
           runtime_base_url: form.runtimeBaseUrl.trim(),
           description: form.description.trim(),
         });
-        setNotice(`Updated assistant profile: ${updated.name}`);
+        setNotice(`Updated assistant: ${updated.name}`);
       } else {
         const created = await createAssistant({
           project_id: projectId,
@@ -134,7 +134,7 @@ export default function AgentsPage() {
           runtime_base_url: form.runtimeBaseUrl.trim(),
           description: form.description.trim(),
         });
-        setNotice(`Created assistant profile: ${created.name}`);
+        setNotice(`Created assistant: ${created.name}`);
         setOffset(0);
         setAssistantId(created.id);
       }
@@ -159,7 +159,7 @@ export default function AgentsPage() {
       if (assistantId === agent.id) {
         setAssistantId("");
       }
-      setNotice(`Deleted assistant profile: ${agent.name}`);
+      setNotice(`Deleted assistant: ${agent.name}`);
       await refreshList();
     } catch (err) {
       setError(toUserErrorMessage(err));
@@ -183,26 +183,26 @@ export default function AgentsPage() {
     if (typeof window === "undefined") {
       return false;
     }
-    return window.confirm(`Delete assistant profile "${agent.name}"? This action cannot be undone.`);
+    return window.confirm(`Delete assistant "${agent.name}"? This action cannot be undone.`);
   }
 
   return (
     <section className="p-4 sm:p-6">
       <h2 className="text-xl font-semibold tracking-tight">Assistants</h2>
-      <p className="text-muted-foreground mt-2 text-sm">Project-scoped assistant profiles. Chat runs use selected assistant_id.</p>
+      <p className="text-muted-foreground mt-2 text-sm">Project-scoped assistants. Chat runs use selected assistant_id.</p>
 
       {!projectId ? <PageStateNotice message="Select a project first." /> : null}
 
       {projectId ? (
         <form className="mt-4 grid gap-4 rounded-lg border border-border/80 bg-card/70 p-4 shadow-sm" onSubmit={onSubmit}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold tracking-tight">{editingId ? "Update assistant profile" : "Create assistant profile"}</h3>
+            <h3 className="text-sm font-semibold tracking-tight">{editingId ? "Update assistant" : "Create assistant"}</h3>
             <span className={`${helperTextClassName} sm:text-right`}>Name and Graph ID must be 2-128 chars</span>
           </div>
           <div className="grid gap-2 md:grid-cols-2">
             <input
               className={fieldClassName}
-              placeholder="Assistant profile name"
+              placeholder="Assistant name"
               value={form.name}
               onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
               disabled={actionDisabled}
@@ -228,7 +228,7 @@ export default function AgentsPage() {
                 ))}
               </datalist>
               <p className={helperTextClassName}>
-                Graph ID maps to a deployed graph, while chat execution still uses the selected assistant_id.
+                Graph ID maps to a deployed graph; runtime assistant id is auto-managed by the platform while chat execution uses the selected assistant_id.
               </p>
             </div>
             <div className="grid gap-1.5">
@@ -355,7 +355,7 @@ export default function AgentsPage() {
       {error ? <PageStateError message={error} /> : null}
       {notice ? <PageStateNotice message={notice} /> : null}
 
-      {!loading && !error && projectId && items.length === 0 ? <PageStateEmpty message="No agents found." /> : null}
+      {!loading && !error && projectId && items.length === 0 ? <PageStateEmpty message="No assistants found." /> : null}
 
       {!loading && !error && projectId && items.length > 0 ? (
         <div className="mt-4 overflow-auto rounded-lg border border-border/80 bg-card/70 shadow-sm">
@@ -364,6 +364,7 @@ export default function AgentsPage() {
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Graph ID</th>
+                <th className="px-3 py-2">Runtime Assistant ID</th>
                 <th className="px-3 py-2">Runtime URL</th>
                 <th className="px-3 py-2">Description</th>
                 <th className="px-3 py-2">Actions</th>
@@ -374,6 +375,7 @@ export default function AgentsPage() {
                 <tr key={agent.id} className="border-t transition-colors hover:bg-muted/30">
                   <td className="px-3 py-2 font-medium">{agent.name}</td>
                   <td className="px-3 py-2">{agent.graph_id}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{agent.langgraph_assistant_id || "-"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{agent.runtime_base_url}</td>
                   <td className="px-3 py-2 text-muted-foreground">{agent.description || "-"}</td>
                   <td className="px-3 py-2">

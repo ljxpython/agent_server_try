@@ -8,6 +8,8 @@ from typing import Any
 import jwt
 from jwt import InvalidTokenError, PyJWKClient
 
+from app.auth.audience import audience_matches
+
 
 logger = logging.getLogger("proxy.keycloak")
 
@@ -60,7 +62,6 @@ class KeycloakVerifier:
             token,
             signing_key.key,
             algorithms=["RS256", "RS384", "RS512"],
-            audience=self.settings.audience,
             issuer=self.settings.issuer,
             options={
                 "verify_signature": True,
@@ -68,10 +69,17 @@ class KeycloakVerifier:
                 "verify_nbf": True,
                 "verify_iat": True,
                 "verify_iss": bool(self.settings.issuer),
-                "verify_aud": bool(self.settings.audience),
+                "verify_aud": False,
                 "require": ["exp", "iat", "sub"],
             },
         )
+
+        expected_audience = self.settings.audience
+        if expected_audience and not audience_matches(payload, expected_audience):
+            raise InvalidTokenError(
+                f"Audience mismatch: expected={expected_audience}, got_aud={payload.get('aud')}, got_azp={payload.get('azp')}"
+            )
+
         logger.debug("keycloak_token_verified subject=%s", payload.get("sub"))
         return payload
 
