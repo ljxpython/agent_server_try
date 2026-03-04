@@ -224,7 +224,7 @@ def create_agent(
         graph_id=graph_id,
         runtime_base_url=runtime_base_url,
         description=description,
-        langgraph_assistant_id=langgraph_assistant_id,
+        langgraph_assistant_id=langgraph_assistant_id or "",
     )
     session.add(agent)
     session.flush()
@@ -244,7 +244,7 @@ def update_agent(
     agent.graph_id = graph_id
     agent.runtime_base_url = runtime_base_url
     agent.description = description
-    agent.langgraph_assistant_id = langgraph_assistant_id
+    agent.langgraph_assistant_id = langgraph_assistant_id or ""
     session.flush()
     return agent
 

@@ -65,7 +65,7 @@ async def list_agents_for_project_id(
                     "name": a.name,
                     "graph_id": a.graph_id,
                     "runtime_base_url": a.runtime_base_url,
-                    "langgraph_assistant_id": a.langgraph_assistant_id,
+                    "langgraph_assistant_id": a.langgraph_assistant_id or "",
                     "description": a.description,
                 }
                 for a in agents
@@ -121,7 +121,7 @@ async def create_agent_for_project(
             "name": agent.name,
             "graph_id": agent.graph_id,
             "runtime_base_url": agent.runtime_base_url,
-            "langgraph_assistant_id": agent.langgraph_assistant_id,
+            "langgraph_assistant_id": agent.langgraph_assistant_id or "",
             "description": agent.description,
         }
 
@@ -194,6 +194,6 @@ async def update_agent_by_id(
             "name": updated.name,
             "graph_id": updated.graph_id,
             "runtime_base_url": updated.runtime_base_url,
-            "langgraph_assistant_id": updated.langgraph_assistant_id,
+            "langgraph_assistant_id": updated.langgraph_assistant_id or "",
             "description": updated.description,
         }

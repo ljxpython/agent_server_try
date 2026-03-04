@@ -84,6 +84,7 @@ class CreateAssistantRequest(BaseModel):
     name: str = Field(min_length=2, max_length=128)
     graph_id: str = Field(min_length=2, max_length=128)
     runtime_base_url: str = Field(min_length=10, max_length=512)
+    langgraph_assistant_id: str = Field(default="", max_length=128)
     description: str = Field(default="", max_length=2000)
 
 
@@ -91,6 +92,7 @@ class UpdateAssistantRequest(BaseModel):
     name: str = Field(min_length=2, max_length=128)
     graph_id: str = Field(min_length=2, max_length=128)
     runtime_base_url: str = Field(min_length=10, max_length=512)
+    langgraph_assistant_id: str = Field(default="", max_length=128)
     description: str = Field(default="", max_length=2000)
 
 
@@ -318,6 +320,7 @@ async def create_assistant_endpoint(request: Request, payload: CreateAssistantRe
         name=payload.name,
         graph_id=payload.graph_id,
         runtime_base_url=payload.runtime_base_url,
+        langgraph_assistant_id=payload.langgraph_assistant_id,
         description=payload.description,
     )
     return AssistantResponse(**row)
@@ -352,6 +355,7 @@ async def update_assistant_endpoint(request: Request, assistant_id: str, payload
         name=payload.name,
         graph_id=payload.graph_id,
         runtime_base_url=payload.runtime_base_url,
+        langgraph_assistant_id=payload.langgraph_assistant_id,
         description=payload.description,
     )
     return AssistantResponse(**row)
