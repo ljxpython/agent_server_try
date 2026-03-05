@@ -38,7 +38,14 @@ export default function LoginPage() {
               refresh_token: payload.refresh_token,
             });
             ensureApiUrlSeeded();
-            router.replace("/workspace/chat");
+            const redirectParam =
+              typeof window === "undefined"
+                ? ""
+                : new URLSearchParams(window.location.search).get("redirect") || "";
+            const redirectTo = redirectParam.startsWith("/workspace")
+              ? redirectParam
+              : "/workspace/chat";
+            router.replace(redirectTo);
           } catch (submitError) {
             setError(submitError instanceof Error ? submitError.message : "Account login failed");
           } finally {
