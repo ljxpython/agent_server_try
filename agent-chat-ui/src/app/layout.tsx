@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import { IBM_Plex_Sans } from "next/font/google";
-import React from "react";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
+import type { ReactNode } from "react";
+import { Suspense } from "react";
+
+import "./globals.css";
+
+import { GlobalAuthGuard } from "@/components/platform/global-auth-guard";
 
 const ibmPlexSans = IBM_Plex_Sans({
   subsets: ["latin"],
@@ -19,12 +23,16 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode;
+  children: ReactNode;
 }>) {
   return (
     <html lang="en">
       <body className={`${ibmPlexSans.variable} font-sans`}>
-        <NuqsAdapter>{children}</NuqsAdapter>
+        <NuqsAdapter>
+          <Suspense fallback={<div className="p-6">Loading...</div>}>
+            <GlobalAuthGuard>{children}</GlobalAuthGuard>
+          </Suspense>
+        </NuqsAdapter>
       </body>
     </html>
   );
