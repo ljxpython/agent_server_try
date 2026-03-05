@@ -38,6 +38,18 @@ def _to_sse_chunk(event: Any) -> bytes:
             return f"{event}\n\n".encode("utf-8")
         return f"data: {event}\n\n".encode("utf-8")
 
+    if isinstance(event, (list, tuple)):
+        if len(event) >= 2 and isinstance(event[0], str):
+            event_name = event[0]
+            event_data = event[1]
+            event_id = event[2] if len(event) >= 3 else None
+            encoded_data = json.dumps(jsonable_encoder(event_data), separators=(",", ":"), ensure_ascii=False)
+            chunks = [f"event: {event_name}\n", f"data: {encoded_data}\n"]
+            if event_id is not None:
+                chunks.append(f"id: {event_id}\n")
+            chunks.append("\n")
+            return "".join(chunks).encode("utf-8")
+
     encoded = json.dumps(jsonable_encoder(event), separators=(",", ":"), ensure_ascii=False)
     return f"data: {encoded}\n\n".encode("utf-8")
 

@@ -1,7 +1,3 @@
-import { validate } from "uuid";
-import { getApiKey } from "@/lib/api-key";
-import { logClient } from "@/lib/client-logger";
-import { isJwtToken } from "@/lib/token";
 import type { Thread } from "@langchain/langgraph-sdk";
 import { useQueryState } from "nuqs";
 import {
@@ -13,6 +9,10 @@ import {
   useContext,
   useState,
 } from "react";
+import { validate } from "uuid";
+import { getApiKey } from "@/lib/api-key";
+import { logClient } from "@/lib/client-logger";
+import { isJwtToken } from "@/lib/token";
 import { createClient } from "./client";
 import { useWorkspaceContext } from "./WorkspaceContext";
 
@@ -23,6 +23,19 @@ function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
     return fallbackApiUrl || DEFAULT_PROXY_API_URL;
   }
   return apiUrl;
+}
+
+function appendLangGraphApiPrefix(apiUrl: string): string {
+  if (!apiUrl) {
+    return apiUrl;
+  }
+
+  const normalizedBase = apiUrl.replace(/\/+$/, "");
+  if (normalizedBase.endsWith("/api/langgraph")) {
+    return normalizedBase;
+  }
+
+  return `${normalizedBase}/api/langgraph`;
 }
 
 interface ThreadContextType {
@@ -57,7 +70,9 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
   const [threadsLoading, setThreadsLoading] = useState(false);
 
   const getThreads = useCallback(async (): Promise<Thread[]> => {
-    const finalApiUrl = normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl);
+    const finalApiUrl = appendLangGraphApiPrefix(
+      normalizeApiUrl(apiUrl || envApiUrl || "", envApiUrl),
+    );
     const finalAssistantId = assistantId || envAssistantId;
     if (!finalApiUrl || !finalAssistantId) return [];
 

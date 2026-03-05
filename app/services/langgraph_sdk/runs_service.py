@@ -135,12 +135,12 @@ class LangGraphRunsService:
     async def stream(self, thread_id: str, payload: dict[str, Any]) -> Any:
         assistant_id = payload["assistant_id"]
         stream_payload = {key: payload[key] for key in self._STREAM_FIELDS if key in payload}
-        return await self._client.runs.stream(thread_id, assistant_id, **stream_payload)
+        return self._client.runs.stream(thread_id, assistant_id, **stream_payload)
 
     async def stream_global(self, payload: dict[str, Any]) -> Any:
         assistant_id = payload["assistant_id"]
         stream_payload = {key: payload[key] for key in self._STREAM_FIELDS if key in payload}
-        return await self._client.runs.stream(None, assistant_id, **stream_payload)
+        return self._client.runs.stream(None, assistant_id, **stream_payload)
 
     async def wait(self, thread_id: str, payload: dict[str, Any]) -> Any:
         assistant_id = payload["assistant_id"]
@@ -184,7 +184,7 @@ class LangGraphRunsService:
         join_stream_payload = {
             key: payload[key] for key in self._JOIN_STREAM_FIELDS if payload is not None and key in payload
         }
-        return await self._client.runs.join_stream(thread_id, run_id, **join_stream_payload)
+        return self._client.runs.join_stream(thread_id, run_id, **join_stream_payload)
 
     async def create_cron(self, payload: dict[str, Any]) -> Any:
         assistant_id = payload["assistant_id"]

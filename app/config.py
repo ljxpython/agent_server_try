@@ -16,6 +16,8 @@ class Settings:
     platform_db_auto_create: bool
     database_url: str | None
     auth_required: bool
+    langgraph_auth_required: bool
+    langgraph_scope_guard_enabled: bool
     jwt_access_secret: str
     jwt_refresh_secret: str
     jwt_access_ttl_seconds: int
@@ -47,6 +49,8 @@ def load_settings() -> Settings:
         platform_db_auto_create=_as_bool(os.getenv("PLATFORM_DB_AUTO_CREATE", "false")),
         database_url=os.getenv("DATABASE_URL") or None,
         auth_required=_as_bool(os.getenv("AUTH_REQUIRED", "true"), True),
+        langgraph_auth_required=_as_bool(os.getenv("LANGGRAPH_AUTH_REQUIRED", "false"), False),
+        langgraph_scope_guard_enabled=_as_bool(os.getenv("LANGGRAPH_SCOPE_GUARD_ENABLED", "false"), False),
         jwt_access_secret=os.getenv("JWT_ACCESS_SECRET", "change-me-access-secret"),
         jwt_refresh_secret=os.getenv("JWT_REFRESH_SECRET", "change-me-refresh-secret"),
         jwt_access_ttl_seconds=max(60, int(os.getenv("JWT_ACCESS_TTL_SECONDS", "1800"))),

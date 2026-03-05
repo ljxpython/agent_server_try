@@ -56,7 +56,7 @@ export function HumanMessage({
       { messages: [newMessage] },
       {
         checkpoint: parentCheckpoint,
-        streamMode: ["values"],
+        streamMode: ["messages", "values"],
         streamSubgraphs: true,
         streamResumable: true,
         optimisticValues: (prev) => {
@@ -86,11 +86,11 @@ export function HumanMessage({
             {Array.isArray(message.content) && message.content.length > 0 && (
               <div className="flex flex-wrap items-end justify-end gap-2">
                 {message.content.reduce<React.ReactNode[]>(
-                  (acc, block, idx) => {
+                  (acc, block) => {
                     if (isBase64ContentBlock(block)) {
                       acc.push(
                         <MultimodalPreview
-                          key={idx}
+                          key={JSON.stringify(block)}
                           block={block}
                           size="md"
                         />,

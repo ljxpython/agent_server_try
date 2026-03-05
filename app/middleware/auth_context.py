@@ -32,6 +32,9 @@ def register_auth_context_middleware(app: FastAPI, settings: Settings) -> None:
 
     @app.middleware("http")
     async def auth_context_middleware(request: Request, call_next):
+        if request.url.path.startswith("/api/langgraph") and not settings.langgraph_auth_required:
+            return await call_next(request)
+
         if (
             request.url.path in public_paths
             or request.method.upper() == "OPTIONS"

@@ -14,6 +14,11 @@ _PROJECT_ID_HEADER = "x-project-id"
 _THREAD_PROJECT_ID_KEYS = ("project_id", "x-project-id", "projectId")
 
 
+def _scope_guard_enabled(request: Request) -> bool:
+    settings = getattr(request.app.state, "settings", None)
+    return bool(getattr(settings, "langgraph_scope_guard_enabled", False))
+
+
 def _require_db_session_factory(request: Request) -> Any:
     session_factory = getattr(request.app.state, "db_session_factory", None)
     if session_factory is None:
@@ -49,7 +54,9 @@ def _thread_project_id_from_metadata(thread: Any) -> str | None:
 
 
 def require_project_id(request: Request) -> str:
-    """运行时路由强制要求 x-project-id，避免跨项目透传。"""
+    if not _scope_guard_enabled(request):
+        return ""
+
     raw_project_id = request.headers.get(_PROJECT_ID_HEADER)
     normalized = _normalize_project_id(raw_project_id)
     if normalized is None:
@@ -58,6 +65,9 @@ def require_project_id(request: Request) -> str:
 
 
 async def assert_assistant_belongs_project(request: Request, assistant_id: str) -> None:
+    if not _scope_guard_enabled(request):
+        return
+
     project_uuid = uuid.UUID(require_project_id(request))
     session_factory = _require_db_session_factory(request)
     with session_scope(session_factory) as session:
@@ -71,6 +81,9 @@ async def assert_assistant_belongs_project(request: Request, assistant_id: str) 
 
 
 async def assert_thread_belongs_project(request: Request, thread_id: str) -> None:
+    if not _scope_guard_enabled(request):
+        return
+
     project_id = require_project_id(request)
     client = get_langgraph_client(request)
     try:
@@ -85,6 +98,9 @@ async def assert_thread_belongs_project(request: Request, thread_id: str) -> Non
 
 
 def inject_project_metadata(request: Request, payload: dict[str, Any]) -> dict[str, Any]:
+    if not _scope_guard_enabled(request):
+        return dict(payload) if isinstance(payload, dict) else {}
+
     project_id = require_project_id(request)
     next_payload = dict(payload) if isinstance(payload, dict) else {}
     metadata = next_payload.get("metadata")
