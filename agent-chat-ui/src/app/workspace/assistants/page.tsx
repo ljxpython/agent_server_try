@@ -155,6 +155,7 @@ export default function AssistantsPage() {
     }
     try {
       await deleteAssistant(deletingId, {
+        deleteRuntime: true,
         projectId,
       });
       setNotice("Assistant deleted.");
@@ -398,7 +399,7 @@ export default function AssistantsPage() {
         title="Delete assistant"
         description={
           <span>
-            This removes assistant from platform metadata. Runtime assistant is kept by default.
+            This removes assistant from platform metadata and deletes runtime assistant.
           </span>
         }
         confirmLabel="Delete"
