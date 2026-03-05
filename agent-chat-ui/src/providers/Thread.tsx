@@ -9,7 +9,6 @@ import {
   useContext,
   useState,
 } from "react";
-import { validate } from "uuid";
 import { getApiKey } from "@/lib/api-key";
 import { logClient } from "@/lib/client-logger";
 import { isJwtToken } from "@/lib/token";
@@ -49,13 +48,14 @@ interface ThreadContextType {
 const ThreadContext = createContext<ThreadContextType | undefined>(undefined);
 
 function getThreadSearchMetadata(
-  assistantId: string,
+  targetType: string,
+  targetId: string,
 ): { graph_id: string } | { assistant_id: string } {
-  if (validate(assistantId)) {
-    return { assistant_id: assistantId };
-  } else {
-    return { graph_id: assistantId };
+  if (targetType === "graph") {
+    return { graph_id: targetId };
   }
+
+  return { assistant_id: targetId };
 }
 
 export function ThreadProvider({ children }: { children: ReactNode }) {
@@ -66,6 +66,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
   const [apiUrl] = useQueryState("apiUrl");
   const [assistantId] = useQueryState("assistantId");
+  const [targetType] = useQueryState("targetType", { defaultValue: "assistant" });
   const [threads, setThreads] = useState<Thread[]>([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
 
@@ -89,7 +90,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
     try {
       const threads = await client.threads.search({
         metadata: {
-          ...getThreadSearchMetadata(finalAssistantId),
+          ...getThreadSearchMetadata(targetType || "assistant", finalAssistantId),
         },
         limit: 100,
       });
@@ -119,7 +120,15 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
 
       throw error;
     }
-  }, [apiUrl, assistantId, envApiUrl, envAssistantId, projectId, autoTokenEnabled]);
+  }, [
+    apiUrl,
+    assistantId,
+    envApiUrl,
+    envAssistantId,
+    projectId,
+    autoTokenEnabled,
+    targetType,
+  ]);
 
   const value = {
     getThreads,

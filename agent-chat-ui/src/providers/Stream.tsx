@@ -76,6 +76,88 @@ async function checkGraphStatus(
   }
 }
 
+async function fetchGraphs(
+  apiUrl: string,
+  authHeaders: Record<string, string>,
+): Promise<string[]> {
+  try {
+    const response = await fetch(`${apiUrl}/graphs/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
+      body: JSON.stringify({ limit: 200, offset: 0 }),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as {
+      items?: Array<{ graph_id?: string }>;
+    };
+    if (!Array.isArray(payload.items)) {
+      return [];
+    }
+
+    return payload.items
+      .map((item) => (typeof item?.graph_id === "string" ? item.graph_id : ""))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+type AssistantOption = {
+  assistant_id: string;
+  name?: string | null;
+};
+
+async function fetchAssistants(
+  apiUrl: string,
+  authHeaders: Record<string, string>,
+): Promise<AssistantOption[]> {
+  try {
+    const response = await fetch(`${apiUrl}/assistants/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders,
+      },
+      body: JSON.stringify({ limit: 200, offset: 0 }),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as
+      | Array<{ assistant_id?: string; name?: string | null }>
+      | {
+          items?: Array<{ assistant_id?: string; name?: string | null }>;
+        };
+
+    const rows = Array.isArray(payload)
+      ? payload
+      : Array.isArray(payload.items)
+        ? payload.items
+        : [];
+
+    return rows
+      .map((item) => ({
+        assistant_id:
+          typeof item?.assistant_id === "string" ? item.assistant_id : "",
+        name: typeof item?.name === "string" ? item.name : null,
+      }))
+      .filter((item) => item.assistant_id);
+  } catch {
+    return [];
+  }
+}
+
 const StreamSession = ({
   children,
   apiKey,
@@ -252,6 +334,13 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   const [assistantId, setAssistantId] = useQueryState("assistantId", {
     defaultValue: envAssistantId || "",
   });
+  const [targetType, setTargetType] = useQueryState("targetType", {
+    defaultValue: "assistant",
+  });
+  const normalizedTargetType = targetType === "graph" ? "graph" : "assistant";
+  const [assistantOptions, setAssistantOptions] = useState<AssistantOption[]>([]);
+  const [graphOptions, setGraphOptions] = useState<string[]>([]);
+  const [isGraphOptionsLoading, setIsGraphOptionsLoading] = useState(false);
 
   const [apiKey, _setApiKey] = useState(() => {
     if (autoTokenEnabled) {
@@ -308,6 +397,43 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   const finalApiUrl = appendLangGraphApiPrefix(normalizedApiUrl);
   const finalAssistantId = assistantId || envAssistantId;
 
+  const formStatusHeaders = useMemo<Record<string, string>>(() => {
+    const headers: Record<string, string> = {};
+    if (projectId) {
+      headers["x-project-id"] = projectId;
+    }
+    if (isJwtToken(apiKey)) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    } else if (apiKey) {
+      headers["X-Api-Key"] = apiKey;
+    }
+    return headers;
+  }, [projectId, apiKey]);
+
+  useEffect(() => {
+    if (finalApiUrl && finalAssistantId) {
+      return;
+    }
+
+    if (!finalApiUrl) {
+      setGraphOptions([]);
+      return;
+    }
+
+    setIsGraphOptionsLoading(true);
+    Promise.all([
+      fetchAssistants(finalApiUrl, formStatusHeaders),
+      fetchGraphs(finalApiUrl, formStatusHeaders),
+    ])
+      .then(([assistants, graphs]) => {
+        setAssistantOptions(assistants);
+        setGraphOptions(graphs);
+      })
+      .finally(() => {
+        setIsGraphOptionsLoading(false);
+      });
+  }, [finalApiUrl, finalAssistantId, formStatusHeaders]);
+
   // Show the form if we: don't have an API URL, or don't have an assistant ID
   if (!finalApiUrl || !finalAssistantId) {
     return (
@@ -332,12 +458,31 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
               const form = e.target as HTMLFormElement;
               const formData = new FormData(form);
               const apiUrl = formData.get("apiUrl") as string;
-              const assistantId = formData.get("assistantId") as string;
+              const typeInput =
+                (formData.get("targetType") as string) === "graph"
+                  ? "graph"
+                  : "assistant";
+              const selectedAssistant =
+                (formData.get("selectedAssistantId") as string) || "";
+              const selectedGraph =
+                (formData.get("selectedGraphId") as string) || "";
               const apiKey = formData.get("apiKey") as string;
+              const resolvedAssistantId =
+                typeInput === "graph"
+                  ? selectedGraph.trim()
+                  : selectedAssistant.trim();
+
+              if (!resolvedAssistantId) {
+                toast.error("Target ID is required", {
+                  description: "Please select one assistant/graph from dropdown.",
+                });
+                return;
+              }
 
               setApiUrl(apiUrl);
               setApiKey(apiKey);
-              setAssistantId(assistantId);
+              setTargetType(typeInput);
+              setAssistantId(resolvedAssistantId);
 
               form.reset();
             }}
@@ -361,22 +506,94 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="assistantId">
-                Assistant / Graph ID<span className="text-rose-500">*</span>
+              <Label htmlFor="targetType">
+                Target Type<span className="text-rose-500">*</span>
               </Label>
               <p className="text-muted-foreground text-sm">
-                This is the ID of the graph (can be the graph name), or
-                assistant to fetch threads from, and invoke when actions are
-                taken.
+                Select exactly one target type for chat runs.
               </p>
-              <Input
-                id="assistantId"
-                name="assistantId"
-                className="bg-background"
-                defaultValue={assistantId || DEFAULT_ASSISTANT_ID}
-                required
-              />
+              <select
+                id="targetType"
+                name="targetType"
+                className="bg-background border-input ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                value={normalizedTargetType}
+                onChange={(event) => {
+                  const nextType = event.target.value === "graph" ? "graph" : "assistant";
+                  setTargetType(nextType);
+                }}
+              >
+                <option value="assistant">Assistant</option>
+                <option value="graph">Graph</option>
+              </select>
             </div>
+
+            {normalizedTargetType === "assistant" ? (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="selectedAssistantId">Assistant List</Label>
+                <p className="text-muted-foreground text-sm">
+                  Optional: pick from assistant options.
+                </p>
+                <select
+                  id="selectedAssistantId"
+                  name="selectedAssistantId"
+                  className="bg-background border-input ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                  defaultValue=""
+                  required={normalizedTargetType === "assistant"}
+                  disabled={
+                    isGraphOptionsLoading || assistantOptions.length === 0
+                  }
+                >
+                  <option value="">
+                    {isGraphOptionsLoading
+                      ? "Loading assistants..."
+                      : assistantOptions.length > 0
+                        ? "Select assistant"
+                        : "No assistant options"}
+                  </option>
+                  {assistantOptions.map((assistant) => (
+                    <option
+                      key={assistant.assistant_id}
+                      value={assistant.assistant_id}
+                    >
+                      {assistant.name?.trim()
+                        ? `${assistant.name} (${assistant.assistant_id})`
+                        : assistant.assistant_id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="selectedGraphId">Graph List</Label>
+                <p className="text-muted-foreground text-sm">
+                  Optional: pick from graph options.
+                </p>
+                <select
+                  id="selectedGraphId"
+                  name="selectedGraphId"
+                  className="bg-background border-input ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                  defaultValue=""
+                  required={normalizedTargetType === "graph"}
+                  disabled={isGraphOptionsLoading || graphOptions.length === 0}
+                >
+                  <option value="">
+                    {isGraphOptionsLoading
+                      ? "Loading graphs..."
+                      : graphOptions.length > 0
+                        ? "Select graph"
+                        : "No graph options"}
+                  </option>
+                  {graphOptions.map((graphId) => (
+                    <option
+                      key={graphId}
+                      value={graphId}
+                    >
+                      {graphId}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="apiKey">LangSmith API Key</Label>
