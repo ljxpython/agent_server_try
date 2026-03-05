@@ -20,6 +20,7 @@ type TogglePosition = {
 const NAV_ITEMS = [
   { href: "/workspace/chat", label: "Chat" },
   { href: "/workspace/graphs", label: "Graphs" },
+  { href: "/workspace/assistants", label: "Assistants" },
   { href: "/workspace/projects", label: "Projects" },
   { href: "/workspace/users", label: "Users" },
   { href: "/workspace/me", label: "My Profile" },

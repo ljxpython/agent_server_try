@@ -29,6 +29,7 @@ class Settings:
     backend_log_max_bytes: int
     backend_log_backup_count: int
     api_docs_enabled: bool
+    langgraph_graph_source_root: str | None
 
 
 def _as_bool(value: str, default: bool = False) -> bool:
@@ -62,4 +63,5 @@ def load_settings() -> Settings:
         backend_log_max_bytes=max(1024 * 1024, int(os.getenv("BACKEND_LOG_MAX_BYTES", str(10 * 1024 * 1024)))),
         backend_log_backup_count=max(1, int(os.getenv("BACKEND_LOG_BACKUP_COUNT", "5"))),
         api_docs_enabled=_as_bool(os.getenv("API_DOCS_ENABLED", "false")),
+        langgraph_graph_source_root=os.getenv("LANGGRAPH_GRAPH_SOURCE_ROOT") or None,
     )

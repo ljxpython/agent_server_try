@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -49,3 +49,23 @@ class CreateProjectRequest(BaseModel):
 class UpsertMemberRequest(BaseModel):
     user_id: str
     role: str
+
+
+class CreateAssistantRequest(BaseModel):
+    graph_id: str = Field(min_length=1, max_length=128)
+    name: str = Field(min_length=1, max_length=128)
+    description: str = Field(default="")
+    assistant_id: str | None = Field(default=None, min_length=1, max_length=128)
+    config: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class UpdateAssistantRequest(BaseModel):
+    graph_id: str | None = Field(default=None, min_length=1, max_length=128)
+    name: str | None = Field(default=None, min_length=1, max_length=128)
+    description: str | None = None
+    status: Literal["active", "disabled"] | None = None
+    config: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
+    metadata: dict[str, Any] | None = None

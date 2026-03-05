@@ -22,7 +22,7 @@ import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 export default function GraphsPage() {
   const router = useRouter();
-  const { projectId, setAssistantId } = useWorkspaceContext();
+  const { projectId } = useWorkspaceContext();
   const [items, setItems] = useState<ManagementGraph[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -89,7 +89,6 @@ export default function GraphsPage() {
   }
 
   function openChatWithGraph(graphId: string) {
-    setAssistantId(graphId);
     const params = new URLSearchParams();
     if (projectId) {
       params.set("projectId", projectId);

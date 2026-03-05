@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from sqlalchemy import asc, desc, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Agent, AuditLog, Project, ProjectMember, RefreshToken, Tenant, User
+from app.db.models import Agent, AssistantProfile, AuditLog, Project, ProjectMember, RefreshToken, Tenant, User
 
 
 def parse_uuid(value: str) -> uuid.UUID | None:
@@ -255,6 +256,105 @@ def get_agent_by_project_and_langgraph_assistant_id(
         Agent.langgraph_assistant_id == langgraph_assistant_id,
     )
     return session.scalar(stmt)
+
+
+def get_agent_by_id(session: Session, agent_id: uuid.UUID) -> Agent | None:
+    return session.get(Agent, agent_id)
+
+
+def create_agent(
+    session: Session,
+    *,
+    project_id: uuid.UUID,
+    name: str,
+    graph_id: str,
+    runtime_base_url: str,
+    langgraph_assistant_id: str,
+    description: str,
+) -> Agent:
+    row = Agent(
+        project_id=project_id,
+        name=name,
+        graph_id=graph_id,
+        runtime_base_url=runtime_base_url,
+        langgraph_assistant_id=langgraph_assistant_id,
+        description=description,
+    )
+    session.add(row)
+    session.flush()
+    return row
+
+
+def get_assistant_profile_by_agent_id(session: Session, agent_id: uuid.UUID) -> AssistantProfile | None:
+    stmt = select(AssistantProfile).where(AssistantProfile.agent_id == agent_id)
+    return session.scalar(stmt)
+
+
+def upsert_assistant_profile(
+    session: Session,
+    *,
+    agent_id: uuid.UUID,
+    status: str,
+    config: dict[str, Any],
+    context: dict[str, Any],
+    metadata_json: dict[str, Any],
+    actor_user_id: uuid.UUID,
+) -> AssistantProfile:
+    row = get_assistant_profile_by_agent_id(session, agent_id)
+    if row is None:
+        row = AssistantProfile(
+            agent_id=agent_id,
+            status=status,
+            config=config,
+            context=context,
+            metadata_json=metadata_json,
+            created_by=actor_user_id,
+            updated_by=actor_user_id,
+        )
+        session.add(row)
+        session.flush()
+        return row
+
+    row.status = status
+    row.config = config
+    row.context = context
+    row.metadata_json = metadata_json
+    row.updated_by = actor_user_id
+    session.flush()
+    return row
+
+
+def list_project_agents(
+    session: Session,
+    *,
+    project_id: uuid.UUID,
+    limit: int,
+    offset: int,
+    query: str | None = None,
+    graph_id: str | None = None,
+) -> tuple[list[Agent], int]:
+    base_stmt = select(Agent).where(Agent.project_id == project_id)
+    if isinstance(query, str) and query.strip():
+        normalized_query = f"%{query.strip().lower()}%"
+        base_stmt = base_stmt.where(
+            func.lower(Agent.name).like(normalized_query)
+            | func.lower(Agent.description).like(normalized_query)
+            | func.lower(Agent.graph_id).like(normalized_query)
+            | func.lower(Agent.langgraph_assistant_id).like(normalized_query)
+        )
+    if isinstance(graph_id, str) and graph_id.strip():
+        base_stmt = base_stmt.where(Agent.graph_id == graph_id.strip())
+
+    stmt = base_stmt.order_by(desc(Agent.created_at)).offset(offset).limit(limit)
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    rows = list(session.scalars(stmt).all())
+    total = int(session.scalar(count_stmt) or 0)
+    return rows, total
+
+
+def delete_agent(session: Session, row: Agent) -> None:
+    session.delete(row)
+    session.flush()
 
 
 def create_audit_log(
