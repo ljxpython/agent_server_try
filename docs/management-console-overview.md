@@ -16,6 +16,7 @@
 - `workspace/audit`：审计日志
 - `workspace/me`：当前登录用户资料页（My Profile）
 - `workspace/security`：安全相关页面（保留）
+- `workspace/runtime`：LangGraph runtime 能力总览（模型与工具）
 
 ## 3. 功能清单（按模块）
 
