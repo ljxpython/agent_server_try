@@ -91,6 +91,8 @@ curl http://127.0.0.1:2024/_proxy/health
 ## Docs
 
 - `docs/README.md`
+- `docs/dev-tunnel-guide.md`
+- `docs/langgraph-passthrough-guide.md`
 - `docs/management-console-overview.md`
 - `docs/self-hosted-auth-rbac-mvp.md`
 - `docs/postgres-operations.md`
