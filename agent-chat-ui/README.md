@@ -63,7 +63,7 @@ You can bypass the initial setup form by setting the following environment varia
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:2024
-NEXT_PUBLIC_ASSISTANT_ID=agent
+NEXT_PUBLIC_ASSISTANT_ID=assistant
 ```
 
 > [!TIP]
@@ -77,20 +77,16 @@ To use these variables:
 
 When these environment variables are set, the application will use them instead of showing the setup form.
 
-### Optional: Auto-fetch Keycloak token (no manual API key input)
+### Optional: Server-side passthrough target
 
-For local development, you can let the frontend fetch a Keycloak token automatically via `/api/keycloak-token`:
+If you use the bundled Next.js passthrough route in `src/app/api/[..._path]/route.ts`, also set:
 
 ```bash
-NEXT_PUBLIC_AUTO_KEYCLOAK_TOKEN=true
-KEYCLOAK_TOKEN_PROXY_ENABLED=true
-KEYCLOAK_TOKEN_URL=http://127.0.0.1:18080/realms/agent-platform/protocol/openid-connect/token
-KEYCLOAK_CLIENT_ID=agent-proxy
-KEYCLOAK_TOKEN_USERNAME=demo_user
-KEYCLOAK_TOKEN_PASSWORD=Demo@123456
+LANGGRAPH_API_URL=http://127.0.0.1:8123
+LANGSMITH_API_KEY=
 ```
 
-This avoids entering token/API key manually every time. The token is cached and refreshed before expiry.
+`LANGGRAPH_API_URL` is read only on the server route side. `LANGSMITH_API_KEY` is injected there when you proxy requests to a hosted LangGraph deployment.
 
 ### Optional: Frontend logs to file
 
@@ -235,7 +231,7 @@ The quickest way to productionize the Agent Chat UI is to use the [API Passthrou
 This repository already contains all of the code you need to start using this method. The only configuration you need to do is set the proper environment variables.
 
 ```bash
-NEXT_PUBLIC_ASSISTANT_ID="agent"
+NEXT_PUBLIC_ASSISTANT_ID="assistant"
 # This should be the deployment URL of your LangGraph server
 LANGGRAPH_API_URL="https://my-agent.default.us.langgraph.app"
 # This should be the URL of your website + "/api". This is how you connect to the API proxy
