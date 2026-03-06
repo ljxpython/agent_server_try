@@ -1,50 +1,63 @@
-import { v4 as uuidv4 } from "uuid";
-import { ReactNode, useEffect, useRef } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { useStreamContext } from "@/providers/Stream";
-import { useState, FormEvent } from "react";
-import { Button } from "../ui/button";
-import { Checkpoint, Message } from "@langchain/langgraph-sdk";
-import { AssistantMessage, AssistantMessageLoading } from "./messages/ai";
-import { HumanMessage } from "./messages/human";
+import {
+  ArrowDown,
+  ChevronDown,
+  ChevronUp,
+  LoaderCircle,
+  PanelRightOpen,
+  PanelRightClose,
+  Plus,
+  SlidersHorizontal,
+  SquarePen,
+  XIcon,
+} from "lucide-react";
+import { parseAsBoolean, useQueryState } from "nuqs";
+import type { Checkpoint, Message } from "@langchain/langgraph-sdk";
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+import { v4 as uuidv4 } from "uuid";
+
+import { useFileUpload } from "@/hooks/use-file-upload";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import {
   DO_NOT_RENDER_ID_PREFIX,
   ensureToolCallsHaveResponses,
 } from "@/lib/ensure-tool-responses";
-import { LangGraphLogoSVG } from "../icons/langgraph";
-import { TooltipIconButton } from "./tooltip-icon-button";
 import {
-  ArrowDown,
-  LoaderCircle,
-  PanelRightOpen,
-  PanelRightClose,
-  SquarePen,
-  XIcon,
-  Plus,
-} from "lucide-react";
-import { useQueryState, parseAsBoolean } from "nuqs";
-import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
+  listRuntimeModels,
+  listRuntimeTools,
+  type RuntimeModelItem,
+  type RuntimeToolItem,
+} from "@/lib/management-api/runtime";
+import { cn } from "@/lib/utils";
+import { useStreamContext } from "@/providers/Stream";
+import { ArtifactContent, ArtifactTitle, useArtifactContext, useArtifactOpen } from "./artifact";
+import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import ThreadHistory from "./history";
-import { toast } from "sonner";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
-import { Label } from "../ui/label";
-import { Switch } from "../ui/switch";
+import { AssistantMessage, AssistantMessageLoading } from "./messages/ai";
+import { HumanMessage } from "./messages/human";
+import { TooltipIconButton } from "./tooltip-icon-button";
 import { GitHubSVG } from "../icons/github";
+import { LangGraphLogoSVG } from "../icons/langgraph";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "../ui/sheet";
+import { Switch } from "../ui/switch";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
-import { useFileUpload } from "@/hooks/use-file-upload";
-import { ContentBlocksPreview } from "./ContentBlocksPreview";
-import {
-  useArtifactOpen,
-  ArtifactContent,
-  ArtifactTitle,
-  useArtifactContext,
-} from "./artifact";
 
 function StickyToBottomContent(props: {
   content: ReactNode;
@@ -135,6 +148,23 @@ export function Thread() {
     handlePaste,
   } = useFileUpload();
   const [firstTokenReceived, setFirstTokenReceived] = useState(false);
+  const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
+  const [runtimeModels, setRuntimeModels] = useState<RuntimeModelItem[]>([]);
+  const [runtimeTools, setRuntimeTools] = useState<RuntimeToolItem[]>([]);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [draftRuntimeModelId, setDraftRuntimeModelId] = useState("");
+  const [draftRuntimeEnableTools, setDraftRuntimeEnableTools] = useState(false);
+  const [draftRuntimeToolNames, setDraftRuntimeToolNames] = useState<string[]>([]);
+  const [draftTemperatureInput, setDraftTemperatureInput] = useState("");
+  const [draftMaxTokensInput, setDraftMaxTokensInput] = useState("");
+  const [appliedRunOptions, setAppliedRunOptions] = useState({
+    modelId: "",
+    enableTools: false,
+    toolNames: [] as string[],
+    temperature: "",
+    maxTokens: "",
+  });
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
   const stream = useStreamContext();
   const messages = stream.messages;
@@ -148,12 +178,72 @@ export function Thread() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadRuntimeCapabilities() {
+      setRuntimeLoading(true);
+      setRuntimeError(null);
+      try {
+        const [models, tools] = await Promise.all([
+          listRuntimeModels().catch(() => null),
+          listRuntimeTools().catch(() => null),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        const nextModels = models && Array.isArray(models.models) ? models.models : [];
+        const nextTools = tools && Array.isArray(tools.tools) ? tools.tools : [];
+        setRuntimeModels(nextModels);
+        setRuntimeTools(nextTools);
+        if (!appliedRunOptions.modelId) {
+          const defaultModel = nextModels.find((item) => item.is_default)?.model_id || "";
+          if (defaultModel) {
+            setDraftRuntimeModelId(defaultModel);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRuntimeError(error instanceof Error ? error.message : "Failed to load runtime capabilities");
+          setRuntimeModels([]);
+          setRuntimeTools([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setRuntimeLoading(false);
+        }
+      }
+    }
+
+    void loadRuntimeCapabilities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedRunOptions.modelId]);
+
+  useEffect(() => {
+    if (!advancedOptionsOpen) {
+      return;
+    }
+    setDraftRuntimeModelId(appliedRunOptions.modelId);
+    setDraftRuntimeEnableTools(appliedRunOptions.enableTools);
+    setDraftRuntimeToolNames(appliedRunOptions.toolNames);
+    setDraftTemperatureInput(appliedRunOptions.temperature);
+    setDraftMaxTokensInput(appliedRunOptions.maxTokens);
+  }, [advancedOptionsOpen, appliedRunOptions]);
+
+  useEffect(() => {
     if (!stream.error) {
       lastError.current = undefined;
       return;
     }
     try {
-      const message = (stream.error as any).message;
+      const message =
+        typeof stream.error === "object" &&
+        stream.error !== null &&
+        "message" in stream.error &&
+        typeof stream.error.message === "string"
+          ? stream.error.message
+          : undefined;
       if (!message || lastError.current === message) {
         return;
       }
@@ -171,6 +261,74 @@ export function Thread() {
       // no-op
     }
   }, [stream.error]);
+
+  function toggleRuntimeTool(toolName: string) {
+    setDraftRuntimeToolNames((prev) =>
+      prev.includes(toolName)
+        ? prev.filter((name) => name !== toolName)
+        : [...prev, toolName],
+    );
+  }
+
+  function buildRunConfig(): Record<string, unknown> | undefined {
+    const configurable: Record<string, unknown> = {};
+    const trimmedModelId = appliedRunOptions.modelId.trim();
+    if (trimmedModelId) {
+      configurable.model_id = trimmedModelId;
+    }
+    if (appliedRunOptions.enableTools && appliedRunOptions.toolNames.length > 0) {
+      configurable.enable_tools = true;
+      configurable.tools = appliedRunOptions.toolNames;
+    }
+    const normalizedTemperature = appliedRunOptions.temperature.trim();
+    if (normalizedTemperature) {
+      const parsedTemperature = Number(normalizedTemperature);
+      if (Number.isFinite(parsedTemperature)) {
+        configurable.temperature = parsedTemperature;
+      }
+    }
+    const normalizedMaxTokens = appliedRunOptions.maxTokens.trim();
+    if (normalizedMaxTokens) {
+      const parsedMaxTokens = Number(normalizedMaxTokens);
+      if (Number.isFinite(parsedMaxTokens)) {
+        configurable.max_tokens = parsedMaxTokens;
+      }
+    }
+    if (Object.keys(configurable).length === 0) {
+      return undefined;
+    }
+    return { configurable };
+  }
+
+  function hasAppliedRunOptions(): boolean {
+    return Boolean(
+      appliedRunOptions.modelId.trim() ||
+        (appliedRunOptions.enableTools && appliedRunOptions.toolNames.length > 0) ||
+        appliedRunOptions.temperature.trim() ||
+        appliedRunOptions.maxTokens.trim(),
+    );
+  }
+
+  function applyRunOptions() {
+    setAppliedRunOptions({
+      modelId: draftRuntimeModelId,
+      enableTools: draftRuntimeEnableTools,
+      toolNames: draftRuntimeToolNames,
+      temperature: draftTemperatureInput,
+      maxTokens: draftMaxTokensInput,
+    });
+    setAdvancedOptionsOpen(false);
+    toast.success("Run options applied for subsequent messages");
+  }
+
+  function cancelRunOptions() {
+    setDraftRuntimeModelId(appliedRunOptions.modelId);
+    setDraftRuntimeEnableTools(appliedRunOptions.enableTools);
+    setDraftRuntimeToolNames(appliedRunOptions.toolNames);
+    setDraftTemperatureInput(appliedRunOptions.temperature);
+    setDraftMaxTokensInput(appliedRunOptions.maxTokens);
+    setAdvancedOptionsOpen(false);
+  }
 
   // TODO: this should be part of the useStream hook
   const prevMessageLength = useRef(0);
@@ -201,9 +359,11 @@ export function Thread() {
     const toolMessages = ensureToolCallsHaveResponses(stream.messages);
     const context =
       Object.keys(artifactContext).length > 0 ? artifactContext : undefined;
+    const config = buildRunConfig();
     stream.submit(
       { messages: [...toolMessages, newHumanMessage], context },
       {
+        config,
         streamMode: ["messages", "values"],
         streamSubgraphs: true,
         streamResumable: true,
@@ -227,8 +387,10 @@ export function Thread() {
   ) => {
     prevMessageLength.current = prevMessageLength.current - 1;
     setFirstTokenReceived(false);
+    const config = buildRunConfig();
     stream.submit(undefined, {
       checkpoint: parentCheckpoint,
+      config,
       streamMode: ["messages", "values"],
       streamSubgraphs: true,
       streamResumable: true,
@@ -430,6 +592,140 @@ export function Thread() {
                         : "border border-solid",
                     )}
                   >
+                    <Sheet open={advancedOptionsOpen} onOpenChange={setAdvancedOptionsOpen}>
+                      <SheetContent side={isLargeScreen ? "right" : "bottom"} className="overflow-y-auto sm:max-w-xl">
+                        <SheetHeader>
+                          <SheetTitle>Run options</SheetTitle>
+                          <SheetDescription>
+                            These overrides apply only to subsequent messages in the current chat session and do not modify assistant defaults.
+                          </SheetDescription>
+                        </SheetHeader>
+
+                        <div className="grid gap-4 px-4 pb-4">
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            <label className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+                              Model
+                              <select
+                                id="runtime-model-id"
+                                className="bg-background border-input ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                                value={draftRuntimeModelId}
+                                onChange={(event) => setDraftRuntimeModelId(event.target.value)}
+                                disabled={runtimeLoading}
+                              >
+                                <option value="">Use assistant default</option>
+                                {runtimeModels.map((model) => (
+                                  <option key={model.model_id} value={model.model_id}>
+                                    {model.display_name || model.model_id}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <div className="grid gap-1.5">
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  id="runtime-enable-tools"
+                                  checked={draftRuntimeEnableTools}
+                                  onCheckedChange={setDraftRuntimeEnableTools}
+                                />
+                                <Label htmlFor="runtime-enable-tools" className="text-sm text-muted-foreground">
+                                  Enable tools for this run
+                                </Label>
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Toggle runtime tools without persisting anything to the assistant.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            <label htmlFor="runtime-temperature" className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+                              Temperature
+                              <Input
+                                id="runtime-temperature"
+                                value={draftTemperatureInput}
+                                onChange={(event) => setDraftTemperatureInput(event.target.value)}
+                                placeholder="Use assistant default"
+                                inputMode="decimal"
+                              />
+                            </label>
+                            <label htmlFor="runtime-max-tokens" className="grid gap-1.5 text-xs font-medium text-muted-foreground">
+                              Max tokens
+                              <Input
+                                id="runtime-max-tokens"
+                                value={draftMaxTokensInput}
+                                onChange={(event) => setDraftMaxTokensInput(event.target.value)}
+                                placeholder="Use assistant default"
+                                inputMode="numeric"
+                              />
+                            </label>
+                          </div>
+
+                          <div className="grid gap-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-medium text-muted-foreground">Tools</p>
+                              <button
+                                type="button"
+                                className="text-xs text-muted-foreground underline-offset-4 hover:underline"
+                                onClick={() => setDraftRuntimeToolNames([])}
+                              >
+                                Clear tools
+                              </button>
+                            </div>
+                            {runtimeError ? <p className="text-xs text-amber-700">{runtimeError}</p> : null}
+                            <div className="flex flex-wrap gap-2">
+                              {runtimeTools.length > 0 ? (
+                                runtimeTools.map((tool) => {
+                                  const selected = draftRuntimeToolNames.includes(tool.name);
+                                  return (
+                                    <button
+                                      key={tool.name}
+                                      type="button"
+                                      className={cn(
+                                        "inline-flex h-8 items-center rounded-md border px-2 text-xs transition-colors",
+                                        selected
+                                          ? "border-primary bg-primary/10 text-foreground"
+                                          : "border-border bg-background text-muted-foreground hover:text-foreground",
+                                      )}
+                                      onClick={() => toggleRuntimeTool(tool.name)}
+                                      disabled={!draftRuntimeEnableTools}
+                                      title={tool.description || tool.name}
+                                    >
+                                      {tool.name}
+                                    </button>
+                                  );
+                                })
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  {runtimeLoading ? "Loading runtime tools..." : "No runtime tools available."}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <SheetFooter>
+                          <Button type="button" variant="outline" onClick={cancelRunOptions}>
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setDraftRuntimeModelId("");
+                              setDraftRuntimeEnableTools(false);
+                              setDraftRuntimeToolNames([]);
+                              setDraftTemperatureInput("");
+                              setDraftMaxTokensInput("");
+                            }}
+                          >
+                            Reset Draft
+                          </Button>
+                          <Button type="button" onClick={applyRunOptions}>
+                            Confirm Run Options
+                          </Button>
+                        </SheetFooter>
+                      </SheetContent>
+                    </Sheet>
                     <form
                       onSubmit={handleSubmit}
                       className="mx-auto grid max-w-3xl grid-rows-[1fr_auto] gap-2"
@@ -438,6 +734,22 @@ export function Thread() {
                         blocks={contentBlocks}
                         onRemove={removeBlock}
                       />
+                      <div className="px-3 pt-3">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                          onClick={() => setAdvancedOptionsOpen((prev) => !prev)}
+                        >
+                          <SlidersHorizontal className="size-4" />
+                          <span>Run options</span>
+                          {hasAppliedRunOptions() ? (
+                            <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-foreground">
+                              Applied
+                            </span>
+                          ) : null}
+                          {advancedOptionsOpen ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                        </button>
+                      </div>
                       <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
