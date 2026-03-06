@@ -19,7 +19,11 @@ import {
   getThreadPreviewText,
   listThreadsPage,
 } from "@/lib/management-api/threads";
-import { getThreadMessages } from "@/lib/threads";
+import {
+  getThreadAssistantId,
+  getThreadGraphId,
+  getThreadMessages,
+} from "@/lib/threads";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 import { ThreadDetailPanel } from "./thread-detail-panel";
@@ -229,13 +233,32 @@ export function ThreadHistoryPage() {
 
   function handleOpenInChat(nextThreadId: string) {
     const params = new URLSearchParams(searchParams.toString());
+    const targetThread =
+      selectedThread?.thread_id === nextThreadId
+        ? selectedThread
+        : items.find((item) => item.thread_id === nextThreadId) || null;
+    const targetGraphId = getThreadGraphId(targetThread);
+    const targetAssistantId = getThreadAssistantId(targetThread);
+
     params.set("threadId", nextThreadId);
-    if (assistantFilter?.trim()) {
+    params.delete("graphId");
+
+    if (targetGraphId) {
+      params.set("targetType", "graph");
+      params.set("assistantId", targetGraphId);
+      params.set("graphId", targetGraphId);
+    } else if (targetAssistantId) {
+      params.set("targetType", "assistant");
+      params.set("assistantId", targetAssistantId);
+    } else if (graphFilter?.trim()) {
+      params.set("targetType", "graph");
+      params.set("assistantId", graphFilter.trim());
+      params.set("graphId", graphFilter.trim());
+    } else if (assistantFilter?.trim()) {
+      params.set("targetType", "assistant");
       params.set("assistantId", assistantFilter.trim());
     }
-    if (graphFilter?.trim()) {
-      params.set("graphId", graphFilter.trim());
-    }
+
     router.push(`/workspace/chat?${params.toString()}`);
   }
 
