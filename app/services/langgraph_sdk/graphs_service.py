@@ -27,17 +27,22 @@ class LangGraphGraphsService:
         if sort_order not in {"asc", "desc"}:
             sort_order = "asc"
 
-        graph_ids = await self._collect_graph_ids(normalized_payload)
+        graphs = await self._collect_graphs(normalized_payload)
         if query:
-            graph_ids = [graph_id for graph_id in graph_ids if query in graph_id.lower()]
+            graphs = [
+                item
+                for item in graphs
+                if query in item["graph_id"].lower()
+                or query in self._as_string(item.get("description")).strip().lower()
+            ]
 
         reverse = sort_order == "desc"
-        graph_ids.sort(reverse=reverse)
+        graphs.sort(key=lambda item: item["graph_id"].lower(), reverse=reverse)
 
-        total = len(graph_ids)
-        paginated_items = graph_ids[offset : offset + limit]
+        total = len(graphs)
+        paginated_items = graphs[offset : offset + limit]
         return {
-            "items": [{"graph_id": graph_id} for graph_id in paginated_items],
+            "items": paginated_items,
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -46,19 +51,24 @@ class LangGraphGraphsService:
     async def count(self, payload: dict[str, Any]) -> dict[str, int]:
         normalized_payload = payload if isinstance(payload, dict) else {}
         query = self._as_string(normalized_payload.get("query")).strip().lower()
-        graph_ids = await self._collect_graph_ids(normalized_payload)
+        graphs = await self._collect_graphs(normalized_payload)
         if query:
-            graph_ids = [graph_id for graph_id in graph_ids if query in graph_id.lower()]
-        return {"count": len(graph_ids)}
+            graphs = [
+                item
+                for item in graphs
+                if query in item["graph_id"].lower()
+                or query in self._as_string(item.get("description")).strip().lower()
+            ]
+        return {"count": len(graphs)}
 
-    async def _collect_graph_ids(self, payload: dict[str, Any]) -> list[str]:
+    async def _collect_graphs(self, payload: dict[str, Any]) -> list[dict[str, str]]:
         assistants_payload: dict[str, Any] = {
             key: payload[key]
             for key in self._FILTER_FIELDS
             if key in payload and payload[key] is not None
         }
         assistants_payload = inject_project_metadata(self._request, assistants_payload)
-        assistants_payload["select"] = ["graph_id"]
+        assistants_payload["select"] = ["graph_id", "description"]
 
         max_assistants = self._as_non_negative_int(payload.get("max_assistants"), default=2000)
         page_size = self._as_non_negative_int(payload.get("assistants_page_size"), default=200)
@@ -67,7 +77,7 @@ class LangGraphGraphsService:
         if max_assistants <= 0:
             return []
 
-        unique_graph_ids: set[str] = set()
+        graphs_by_id: dict[str, dict[str, str]] = {}
         fetched = 0
         offset = 0
 
@@ -90,14 +100,22 @@ class LangGraphGraphsService:
             for assistant in assistants:
                 graph_id = assistant.get("graph_id")
                 if isinstance(graph_id, str) and graph_id:
-                    unique_graph_ids.add(graph_id)
+                    description = self._as_string(assistant.get("description")).strip()
+                    existing = graphs_by_id.get(graph_id)
+                    if existing is None:
+                        graphs_by_id[graph_id] = {
+                            "graph_id": graph_id,
+                            "description": description,
+                        }
+                    elif not existing.get("description") and description:
+                        existing["description"] = description
 
             fetched += len(assistants)
             offset += len(assistants)
             if len(assistants) < page_payload["limit"]:
                 break
 
-        return list(unique_graph_ids)
+        return list(graphs_by_id.values())
 
     @staticmethod
     def _extract_assistant_rows(rows: Any) -> list[dict[str, Any]]:
