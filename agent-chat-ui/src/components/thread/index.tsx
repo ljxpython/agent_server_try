@@ -32,9 +32,11 @@ import {
 } from "@/lib/management-api/runtime";
 import { cn } from "@/lib/utils";
 import { useStreamContext } from "@/providers/Stream";
+import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 import { ArtifactContent, ArtifactTitle, useArtifactContext, useArtifactOpen } from "./artifact";
 import { ContentBlocksPreview } from "./ContentBlocksPreview";
 import ThreadHistory from "./history";
+import { ThreadIdCopyable } from "./agent-inbox/components/thread-id";
 import { AssistantMessage, AssistantMessageLoading } from "./messages/ai";
 import { HumanMessage } from "./messages/human";
 import { TooltipIconButton } from "./tooltip-icon-button";
@@ -132,6 +134,9 @@ export function Thread() {
     "chatHistoryOpen",
     parseAsBoolean.withDefault(false),
   );
+  const [chatAssistantId] = useQueryState("assistantId", { defaultValue: "" });
+  const [targetType] = useQueryState("targetType", { defaultValue: "assistant" });
+  const [chatGraphId] = useQueryState("graphId", { defaultValue: "" });
   const [hideToolCalls, setHideToolCalls] = useQueryState(
     "hideToolCalls",
     parseAsBoolean.withDefault(false),
@@ -165,6 +170,8 @@ export function Thread() {
     temperature: "",
     maxTokens: "",
   });
+  const [contextBarCollapsed, setContextBarCollapsed] = useState(false);
+  const { projectId } = useWorkspaceContext();
   const isLargeScreen = useMediaQuery("(min-width: 1024px)");
   const stream = useStreamContext();
   const messages = stream.messages;
@@ -408,6 +415,15 @@ export function Thread() {
   const logoSpringTransition = prefersReducedMotion
     ? { duration: 0 }
     : { type: "spring" as const, stiffness: 300, damping: 30 };
+  const normalizedTargetType = targetType === "graph" ? "graph" : "assistant";
+  const activeGraphId = normalizedTargetType === "graph" ? chatAssistantId : chatGraphId;
+  const activeAssistantId = normalizedTargetType === "assistant" ? chatAssistantId : "";
+  const sourceLabel = threadId
+    ? "From Thread"
+    : normalizedTargetType === "graph"
+    ? "From Graph"
+      : "From Assistant";
+  const showContextBar = Boolean(projectId || activeGraphId || activeAssistantId || threadId);
 
   return (
     <div className="flex min-h-0 w-full flex-1 overflow-hidden">
@@ -472,11 +488,23 @@ export function Thread() {
               <div className="absolute top-2 right-4 flex items-center">
                 <OpenGitHubRepo />
               </div>
+              {showContextBar ? (
+                <div className="absolute top-14 left-4 max-w-[calc(100%-2rem)]">
+                  <ChatContextPanel
+                    sourceLabel={sourceLabel}
+                    graphId={activeGraphId}
+                    assistantId={activeAssistantId}
+                    threadId={threadId || ""}
+                    collapsed={contextBarCollapsed}
+                    onToggleCollapsed={() => setContextBarCollapsed((prev) => !prev)}
+                  />
+                </div>
+              ) : null}
             </div>
           )}
           {chatStarted && (
-            <div className="relative z-10 flex items-center justify-between gap-3 p-2">
-              <div className="relative flex items-center justify-start gap-2">
+            <div className="relative z-10 flex items-start justify-between gap-3 p-2">
+              <div className="relative flex min-w-0 flex-1 items-start justify-start gap-2">
                 <div className="absolute left-0 z-10">
                   {(!chatHistoryOpen || !isLargeScreen) && (
                     <Button
@@ -492,22 +520,31 @@ export function Thread() {
                     </Button>
                   )}
                 </div>
-                <motion.button
-                  className="flex cursor-pointer items-center gap-2"
-                  onClick={() => setThreadId(null)}
+                <motion.div
+                  className="flex min-w-0 flex-col gap-2"
                   animate={{
                     marginLeft: !chatHistoryOpen ? 48 : 0,
                   }}
                   transition={logoSpringTransition}
                 >
-                  <LangGraphLogoSVG
-                    width={32}
-                    height={32}
-                  />
-                  <span className="text-xl font-semibold tracking-tight">
-                    Agent Chat
-                  </span>
-                </motion.button>
+                  <motion.button
+                    className="flex cursor-pointer items-center gap-2"
+                    onClick={() => setThreadId(null)}
+                  >
+                    <LangGraphLogoSVG width={32} height={32} />
+                    <span className="text-xl font-semibold tracking-tight">
+                      Agent Chat
+                    </span>
+                  </motion.button>
+                  {showContextBar ? <ChatContextPanel
+                    sourceLabel={sourceLabel}
+                    graphId={activeGraphId}
+                    assistantId={activeAssistantId}
+                    threadId={threadId || ""}
+                    collapsed={contextBarCollapsed}
+                    onToggleCollapsed={() => setContextBarCollapsed((prev) => !prev)}
+                  /> : null}
+                </motion.div>
               </div>
 
               <div className="flex items-center gap-4">
@@ -848,6 +885,102 @@ export function Thread() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ContextChip({
+  label,
+  prominent = false,
+}: {
+  label: string;
+  prominent?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[10px] leading-none",
+        prominent
+          ? "border-primary/30 bg-primary/10 text-foreground"
+          : "border-border/70 bg-background/70 font-mono text-muted-foreground",
+      )}
+      title={label}
+    >
+      <span className="truncate">{label}</span>
+    </span>
+  );
+}
+
+function ThreadContextChip({ threadId }: { threadId: string }) {
+  return (
+    <div className="flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-2 py-1">
+      <span className="font-mono text-[10px] leading-none text-muted-foreground">
+        thread: {threadId}
+      </span>
+      <ThreadIdCopyable threadId={threadId} />
+    </div>
+  );
+}
+
+function ChatContextPanel({
+  sourceLabel,
+  graphId,
+  assistantId,
+  threadId,
+  collapsed,
+  onToggleCollapsed,
+}: {
+  sourceLabel: string;
+  graphId: string;
+  assistantId: string;
+  threadId: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+}) {
+  const summary = [graphId && `graph ${graphId}`, assistantId && `assistant ${assistantId}`, threadId && `thread ${threadId}`]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="inline-grid max-w-full gap-1 rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-[11px] text-muted-foreground shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <ContextChip label={sourceLabel} prominent />
+        <button
+          type="button"
+          onClick={onToggleCollapsed}
+          className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {collapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
+          <span>{collapsed ? "Expand" : "Collapse"}</span>
+        </button>
+      </div>
+      {collapsed ? (
+        <p className="max-w-[min(70vw,32rem)] truncate font-mono text-[11px] text-muted-foreground" title={summary || sourceLabel}>
+          {summary || sourceLabel}
+        </p>
+      ) : (
+        <>
+      {graphId ? <ContextRow label="graph" value={graphId} /> : null}
+      {assistantId ? <ContextRow label="assistant" value={assistantId} /> : null}
+      {threadId ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/80">thread</span>
+          <ThreadContextChip threadId={threadId} />
+        </div>
+      ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ContextRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/80">{label}</span>
+      <span className="max-w-[min(70vw,28rem)] truncate font-mono text-[11px] text-muted-foreground" title={value}>
+        {value}
+      </span>
     </div>
   );
 }
