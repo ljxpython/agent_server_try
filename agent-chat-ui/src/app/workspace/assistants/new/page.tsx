@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { createAssistant, getAssistantParameterSchema } from "@/lib/management-api/assistants";
 import { listGraphsPage } from "@/lib/management-api/graphs";
+import { listRuntimeModels, listRuntimeTools, type RuntimeModelItem, type RuntimeToolItem } from "@/lib/management-api/runtime";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 type SchemaProperty = {
@@ -50,8 +51,6 @@ export default function CreateAssistantPage() {
   const [config, setConfig] = useState("{}");
   const [context, setContext] = useState("{}");
   const [metadata, setMetadata] = useState("{}");
-  const [enableLocalTools, setEnableLocalTools] = useState<"" | "true" | "false">("");
-  const [enableLocalMcp, setEnableLocalMcp] = useState<"" | "true" | "false">("");
   const [schema, setSchema] = useState<ParameterSchemaResponse | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -59,6 +58,13 @@ export default function CreateAssistantPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [runtimeModels, setRuntimeModels] = useState<RuntimeModelItem[]>([]);
+  const [runtimeTools, setRuntimeTools] = useState<RuntimeToolItem[]>([]);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [runtimeModelId, setRuntimeModelId] = useState("");
+  const [runtimeEnableTools, setRuntimeEnableTools] = useState(false);
+  const [runtimeToolNames, setRuntimeToolNames] = useState<string[]>([]);
 
   const configPropertyDefs = useMemo(() => {
     const sections = Array.isArray(schema?.sections) ? schema?.sections : [];
@@ -92,20 +98,34 @@ export default function CreateAssistantPage() {
     }
 
     const configObject = parseObjectJson(config, "config");
-    if (enableLocalTools === "true") {
-      configObject.enable_local_tools = true;
-    } else if (enableLocalTools === "false") {
-      configObject.enable_local_tools = false;
+    const configurableRaw =
+      configObject && typeof configObject.configurable === "object" && !Array.isArray(configObject.configurable)
+        ? (configObject.configurable as Record<string, unknown>)
+        : {};
+    const configurable: Record<string, unknown> = { ...configurableRaw };
+
+    const trimmedModelId = runtimeModelId.trim();
+    if (trimmedModelId) {
+      configurable.model_id = trimmedModelId;
     } else {
-      delete configObject.enable_local_tools;
+      delete configurable.model_id;
     }
-    if (enableLocalMcp === "true") {
-      configObject.enable_local_mcp = true;
-    } else if (enableLocalMcp === "false") {
-      configObject.enable_local_mcp = false;
+
+    const cleanedTools = runtimeToolNames.map((name) => name.trim()).filter((name) => name.length > 0);
+    if (runtimeEnableTools && cleanedTools.length > 0) {
+      configurable.enable_tools = true;
+      configurable.tools = cleanedTools;
     } else {
-      delete configObject.enable_local_mcp;
+      delete configurable.enable_tools;
+      delete configurable.tools;
     }
+
+    if (Object.keys(configurable).length > 0) {
+      configObject.configurable = configurable;
+    } else {
+      delete (configObject as Record<string, unknown>).configurable;
+    }
+
     if (Object.keys(configObject).length > 0) {
       payload.config = configObject;
     }
@@ -121,7 +141,7 @@ export default function CreateAssistantPage() {
     }
 
     return payload;
-  }, [assistantId, config, context, description, enableLocalMcp, enableLocalTools, graphId, metadata, name]);
+  }, [assistantId, config, context, description, graphId, metadata, name, runtimeModelId, runtimeEnableTools, runtimeToolNames]);
 
   useEffect(() => {
     if (!projectId) {
@@ -143,6 +163,42 @@ export default function CreateAssistantPage() {
       .catch(() => setGraphOptions([]))
       .finally(() => setGraphLoading(false));
   }, [graphId, projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadRuntime() {
+      setRuntimeLoading(true);
+      setRuntimeError(null);
+      try {
+        const [modelsResponse, toolsResponse] = await Promise.all([
+          listRuntimeModels().catch(() => null),
+          listRuntimeTools().catch(() => null),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setRuntimeModels(modelsResponse && Array.isArray(modelsResponse.models) ? modelsResponse.models : []);
+        setRuntimeTools(toolsResponse && Array.isArray(toolsResponse.tools) ? toolsResponse.tools : []);
+      } catch (err) {
+        if (!cancelled) {
+          setRuntimeError(err instanceof Error ? err.message : "Failed to load runtime capabilities");
+          setRuntimeModels([]);
+          setRuntimeTools([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setRuntimeLoading(false);
+        }
+      }
+    }
+
+    void loadRuntime();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const normalizedGraphId = graphId.trim();
@@ -230,19 +286,32 @@ export default function CreateAssistantPage() {
       const configObject = parseObjectJson(config, "config");
       const contextObject = parseObjectJson(context, "context");
       const metadataObject = parseObjectJson(metadata, "metadata");
-      if (enableLocalTools === "true") {
-        configObject.enable_local_tools = true;
-      } else if (enableLocalTools === "false") {
-        configObject.enable_local_tools = false;
+      const configurableRaw =
+        configObject && typeof configObject.configurable === "object" && !Array.isArray(configObject.configurable)
+          ? (configObject.configurable as Record<string, unknown>)
+          : {};
+      const configurable: Record<string, unknown> = { ...configurableRaw };
+
+      const trimmedModelId = runtimeModelId.trim();
+      if (trimmedModelId) {
+        configurable.model_id = trimmedModelId;
       } else {
-        delete configObject.enable_local_tools;
+        delete configurable.model_id;
       }
-      if (enableLocalMcp === "true") {
-        configObject.enable_local_mcp = true;
-      } else if (enableLocalMcp === "false") {
-        configObject.enable_local_mcp = false;
+
+      const cleanedTools = runtimeToolNames.map((name) => name.trim()).filter((name) => name.length > 0);
+      if (runtimeEnableTools && cleanedTools.length > 0) {
+        configurable.enable_tools = true;
+        configurable.tools = cleanedTools;
       } else {
-        delete configObject.enable_local_mcp;
+        delete configurable.enable_tools;
+        delete configurable.tools;
+      }
+
+      if (Object.keys(configurable).length > 0) {
+        configObject.configurable = configurable;
+      } else {
+        delete (configObject as Record<string, unknown>).configurable;
       }
 
       const payload: {
@@ -289,6 +358,7 @@ export default function CreateAssistantPage() {
     <section className="p-4 sm:p-6">
       <h2 className="text-xl font-semibold tracking-tight">Create Assistant</h2>
       <p className="text-muted-foreground mt-2 text-sm">Create a project-scoped assistant with dynamic parameters.</p>
+      {runtimeError ? <p className="mt-2 text-xs text-amber-700">{runtimeError}</p> : null}
 
       <form className="mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/70 p-4" onSubmit={onSubmit}>
         <label className="grid gap-1 text-xs font-medium text-muted-foreground">
@@ -343,33 +413,101 @@ export default function CreateAssistantPage() {
           />
         </label>
 
-        <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-          enable_local_tools
-          <select
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm"
-            value={enableLocalTools}
-            onChange={(event) => setEnableLocalTools(event.target.value === "true" ? "true" : event.target.value === "false" ? "false" : "")}
-            disabled={submitting}
-          >
-            <option value="">Not set (omit)</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </label>
-
-        <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-          enable_local_mcp
-          <select
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm"
-            value={enableLocalMcp}
-            onChange={(event) => setEnableLocalMcp(event.target.value === "true" ? "true" : event.target.value === "false" ? "false" : "")}
-            disabled={submitting}
-          >
-            <option value="">Not set (omit)</option>
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </select>
-        </label>
+        <div className="grid gap-2 rounded-md border border-border/80 bg-background/50 p-3">
+          <p className="text-xs font-medium text-muted-foreground">Runtime configuration (config.configurable)</p>
+          {runtimeLoading ? <p className="text-xs text-muted-foreground">Loading runtime capabilities...</p> : null}
+          <div className="grid gap-1">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor="new-assistant-runtime-model">
+              Model group
+            </label>
+            <select
+              id="new-assistant-runtime-model"
+              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+              value={runtimeModelId}
+              onChange={(event) => setRuntimeModelId(event.target.value)}
+              disabled={submitting}
+            >
+              <option value="">Use runtime default</option>
+              {runtimeModels.map((item) => (
+                <option key={item.model_id} value={item.model_id}>
+                  {item.display_name}
+                  {item.is_default ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="new-assistant-runtime-enable-tools"
+              type="checkbox"
+              className="h-4 w-4"
+              checked={runtimeEnableTools}
+              onChange={(event) => setRuntimeEnableTools(event.target.checked)}
+              disabled={submitting}
+            />
+            <label htmlFor="new-assistant-runtime-enable-tools" className="text-xs">
+              Enable tools for this assistant
+            </label>
+          </div>
+          <div className="grid gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Tools</p>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded border border-border bg-background px-2 py-0.5 text-[11px]"
+                  onClick={() => {
+                    const names = runtimeTools.map((tool) => tool.name).filter((name) => name.trim().length > 0);
+                    setRuntimeToolNames(names);
+                  }}
+                  disabled={submitting || !runtimeEnableTools || runtimeTools.length === 0}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded border border-border bg-background px-2 py-0.5 text-[11px]"
+                  onClick={() => setRuntimeToolNames([])}
+                  disabled={submitting || runtimeToolNames.length === 0}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="h-40 overflow-auto rounded-md border border-border bg-background/60 p-2 text-xs">
+              {runtimeTools.length === 0 ? (
+                <p className="text-muted-foreground">No tools reported by runtime.</p>
+              ) : (
+                runtimeTools.map((tool) => {
+                  const checked = runtimeToolNames.includes(tool.name);
+                  return (
+                    <label key={tool.name} className="flex items-center gap-2 py-1">
+                      <input
+                        type="checkbox"
+                        className="h-3 w-3"
+                        checked={checked}
+                        onChange={() => {
+                          setRuntimeToolNames((prev) => {
+                            if (prev.includes(tool.name)) {
+                              return prev.filter((name) => name !== tool.name);
+                            }
+                            return [...prev, tool.name];
+                          });
+                        }}
+                        disabled={submitting || !runtimeEnableTools}
+                      />
+                      <span className="font-mono text-[11px]">{tool.name}</span>
+                      <span className="text-[11px] text-muted-foreground">({tool.source})</span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Fields are written into <code>config.configurable.model_id / enable_tools / tools</code> when creating.
+          </p>
+        </div>
 
         <div className="grid gap-2 rounded-md border border-border/80 bg-background/50 p-3">
           <p className="text-xs font-medium text-muted-foreground">Parameter Schema</p>

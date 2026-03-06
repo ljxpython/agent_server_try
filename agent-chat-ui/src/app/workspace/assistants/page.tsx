@@ -14,6 +14,12 @@ import {
   type ManagementAssistant,
   updateAssistant,
 } from "@/lib/management-api/assistants";
+import {
+  listRuntimeModels,
+  listRuntimeTools,
+  type RuntimeModelItem,
+  type RuntimeToolItem,
+} from "@/lib/management-api/runtime";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
 function stringifyJson(value: unknown): string {
@@ -55,6 +61,13 @@ export default function AssistantsPage() {
   const [editContext, setEditContext] = useState("{}");
   const [editMetadata, setEditMetadata] = useState("{}");
   const [saving, setSaving] = useState(false);
+  const [runtimeModels, setRuntimeModels] = useState<RuntimeModelItem[]>([]);
+  const [runtimeTools, setRuntimeTools] = useState<RuntimeToolItem[]>([]);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [runtimeLoading, setRuntimeLoading] = useState(false);
+  const [runtimeModelId, setRuntimeModelId] = useState("");
+  const [runtimeEnableTools, setRuntimeEnableTools] = useState(false);
+  const [runtimeToolNames, setRuntimeToolNames] = useState<string[]>([]);
 
   const { columnWidths, startResize, resetColumnWidth, resizingColumnIndex } = useResizableColumns(
     [70, 180, 180, 220, 120, 260],
@@ -69,6 +82,41 @@ export default function AssistantsPage() {
     () => items.find((item) => item.id === editingId) ?? null,
     [items, editingId],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadRuntimeCapabilities() {
+      setRuntimeLoading(true);
+      setRuntimeError(null);
+      try {
+        const [models, tools] = await Promise.all([
+          listRuntimeModels().catch(() => null),
+          listRuntimeTools().catch(() => null),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setRuntimeModels(models && Array.isArray(models.models) ? models.models : []);
+        setRuntimeTools(tools && Array.isArray(tools.tools) ? tools.tools : []);
+      } catch (err) {
+        if (!cancelled) {
+          setRuntimeError(err instanceof Error ? err.message : "Failed to load runtime capabilities");
+          setRuntimeModels([]);
+          setRuntimeTools([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setRuntimeLoading(false);
+        }
+      }
+    }
+
+    void loadRuntimeCapabilities();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!projectId) {
@@ -119,6 +167,29 @@ export default function AssistantsPage() {
     setEditConfig(stringifyJson(editingItem.config));
     setEditContext(stringifyJson(editingItem.context));
     setEditMetadata(stringifyJson(editingItem.metadata));
+    try {
+      const configValue = editingItem.config ?? {};
+      const configurable =
+        configValue && typeof configValue === "object" && !Array.isArray(configValue)
+          ? (configValue as Record<string, unknown>).configurable
+          : undefined;
+      const cfg =
+        configurable && typeof configurable === "object" && !Array.isArray(configurable)
+          ? (configurable as Record<string, unknown>)
+          : {};
+      const modelId = typeof cfg.model_id === "string" ? cfg.model_id : "";
+      const enableTools = typeof cfg.enable_tools === "boolean" ? cfg.enable_tools : false;
+      const toolsArray = Array.isArray(cfg.tools)
+        ? (cfg.tools as unknown[]).map((value) => String(value)).filter((value) => value.trim().length > 0)
+        : [];
+      setRuntimeModelId(modelId);
+      setRuntimeEnableTools(enableTools);
+      setRuntimeToolNames(toolsArray);
+    } catch {
+      setRuntimeModelId("");
+      setRuntimeEnableTools(false);
+      setRuntimeToolNames([]);
+    }
   }, [editingItem]);
 
   async function onSaveEdit() {
@@ -129,12 +200,41 @@ export default function AssistantsPage() {
     setError(null);
     setNotice(null);
     try {
+      const nextConfig = parseObjectJson(editConfig, "config");
+      const configurableRaw =
+        nextConfig && typeof nextConfig.configurable === "object" && !Array.isArray(nextConfig.configurable)
+          ? (nextConfig.configurable as Record<string, unknown>)
+          : {};
+      const configurable: Record<string, unknown> = { ...configurableRaw };
+
+      const trimmedModelId = runtimeModelId.trim();
+      if (trimmedModelId) {
+        configurable.model_id = trimmedModelId;
+      } else {
+        delete configurable.model_id;
+      }
+
+      const cleanedTools = runtimeToolNames.map((name) => name.trim()).filter((name) => name.length > 0);
+      if (runtimeEnableTools && cleanedTools.length > 0) {
+        configurable.enable_tools = true;
+        configurable.tools = cleanedTools;
+      } else {
+        delete configurable.enable_tools;
+        delete configurable.tools;
+      }
+
+      if (Object.keys(configurable).length > 0) {
+        nextConfig.configurable = configurable;
+      } else {
+        delete (nextConfig as Record<string, unknown>).configurable;
+      }
+
       const payload = {
         name: editName.trim(),
         description: editDescription.trim(),
         graph_id: editGraphId.trim(),
         status: editStatus,
-        config: parseObjectJson(editConfig, "config"),
+        config: nextConfig,
         context: parseObjectJson(editContext, "context"),
         metadata: parseObjectJson(editMetadata, "metadata"),
       } as const;
@@ -170,6 +270,7 @@ export default function AssistantsPage() {
     <section className="p-4 sm:p-6">
       <h2 className="text-xl font-semibold tracking-tight">Assistants</h2>
       <p className="text-muted-foreground mt-2 text-sm">Manage assistants for current project, including dynamic parameters.</p>
+      {runtimeError ? <p className="mt-2 text-xs text-amber-700">{runtimeError}</p> : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
@@ -346,6 +447,103 @@ export default function AssistantsPage() {
               <option value="disabled">disabled</option>
             </select>
           </label>
+          <div className="grid gap-2 rounded-md border border-border/80 bg-background/40 p-3">
+            <p className="text-xs font-semibold text-muted-foreground">Runtime configuration (config.configurable)</p>
+            {runtimeLoading ? (
+              <p className="text-xs text-muted-foreground">Loading runtime capabilities...</p>
+            ) : null}
+            <div className="grid gap-1">
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="assistant-runtime-model">
+                Model group
+              </label>
+              <select
+                id="assistant-runtime-model"
+                className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+                value={runtimeModelId}
+                onChange={(event) => setRuntimeModelId(event.target.value)}
+                disabled={saving}
+              >
+                <option value="">Use runtime default</option>
+                {runtimeModels.map((item) => (
+                  <option key={item.model_id} value={item.model_id}>
+                    {item.display_name}
+                    {item.is_default ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                id="assistant-runtime-enable-tools"
+                type="checkbox"
+                className="h-4 w-4"
+                checked={runtimeEnableTools}
+                onChange={(event) => setRuntimeEnableTools(event.target.checked)}
+                disabled={saving}
+              />
+              <label htmlFor="assistant-runtime-enable-tools" className="text-xs">
+                Enable tools for this assistant
+              </label>
+            </div>
+          <div className="grid gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Tools</p>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded border border-border bg-background px-2 py-0.5 text-[11px]"
+                  onClick={() => {
+                    const names = runtimeTools.map((tool) => tool.name).filter((name) => name.trim().length > 0);
+                    setRuntimeToolNames(names);
+                  }}
+                  disabled={saving || !runtimeEnableTools || runtimeTools.length === 0}
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded border border-border bg-background px-2 py-0.5 text-[11px]"
+                  onClick={() => setRuntimeToolNames([])}
+                  disabled={saving || runtimeToolNames.length === 0}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div className="h-40 overflow-auto rounded-md border border-border bg-background/60 p-2 text-xs">
+                {runtimeTools.length === 0 ? (
+                  <p className="text-muted-foreground">No tools reported by runtime.</p>
+                ) : (
+                  runtimeTools.map((tool) => {
+                    const checked = runtimeToolNames.includes(tool.name);
+                    return (
+                      <label key={tool.name} className="flex items-center gap-2 py-1">
+                        <input
+                          type="checkbox"
+                          className="h-3 w-3"
+                          checked={checked}
+                          onChange={() => {
+                            setRuntimeToolNames((prev) => {
+                              if (prev.includes(tool.name)) {
+                                return prev.filter((name) => name !== tool.name);
+                              }
+                              return [...prev, tool.name];
+                            });
+                          }}
+                          disabled={saving || !runtimeEnableTools}
+                        />
+                        <span className="font-mono text-[11px]">{tool.name}</span>
+                        <span className="text-[11px] text-muted-foreground">({tool.source})</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Fields are written into <code>config.configurable.model_id / enable_tools / tools</code> when saving.
+            </p>
+          </div>
           <label className="grid gap-1 text-xs font-medium text-muted-foreground">
             Config (JSON object)
             <textarea
