@@ -23,6 +23,8 @@ def _settings() -> Settings:
         platform_db_auto_create=False,
         database_url="postgresql://x:y@localhost:5432/z",
         auth_required=True,
+        langgraph_auth_required=False,
+        langgraph_scope_guard_enabled=False,
         jwt_access_secret="test-access",
         jwt_refresh_secret="test-refresh",
         jwt_access_ttl_seconds=60,
@@ -34,6 +36,7 @@ def _settings() -> Settings:
         backend_log_max_bytes=1024,
         backend_log_backup_count=1,
         api_docs_enabled=False,
+        langgraph_graph_source_root=None,
     )
 
 

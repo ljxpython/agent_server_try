@@ -332,11 +332,16 @@ async def resume_chat(request: Request, payload: dict[str, Any]) -> dict[str, An
     if not isinstance(command, dict):
         raise HTTPException(status_code=400, detail="command must be object")
 
+    run_payload: dict[str, Any] = {
+        "assistant_id": assistant_id,
+        "input": None,
+        "command": command,
+    }
     result = await _request_json(
         request,
         "POST",
         f"/threads/{thread_id}/runs/wait",
-        payload={"assistant_id": assistant_id, "input": None, "command": command},
+        payload=run_payload,
     )
     return {"thread_id": thread_id, "result": result}
 
