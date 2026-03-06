@@ -345,6 +345,15 @@ export default function AssistantsPage() {
                       >
                         Open in Chat
                       </Link>
+                      <Link
+                        href={`/workspace/threads?${new URLSearchParams({
+                          ...(projectId ? { projectId } : {}),
+                          threadAssistantId: item.langgraph_assistant_id,
+                        }).toString()}`}
+                        className="inline-flex h-8 items-center rounded-md border border-border px-2 text-xs"
+                      >
+                        View Threads
+                      </Link>
                       <button
                         type="button"
                         className="inline-flex h-8 items-center rounded-md border border-border px-2 text-xs"

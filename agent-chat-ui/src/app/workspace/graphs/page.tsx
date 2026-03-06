@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -193,13 +194,24 @@ export default function GraphsPage() {
                     {item.description?.trim() ? item.description : "-"}
                   </td>
                   <td className="px-4 py-2">
-                    <button
-                      type="button"
-                      className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
-                      onClick={() => openChatWithGraph(item.graph_id)}
-                    >
-                      Open in Chat
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
+                        onClick={() => openChatWithGraph(item.graph_id)}
+                      >
+                        Open in Chat
+                      </button>
+                      <Link
+                        href={`/workspace/threads?${new URLSearchParams({
+                          ...(projectId ? { projectId } : {}),
+                          threadGraphId: item.graph_id,
+                        }).toString()}`}
+                        className="inline-flex h-8 items-center justify-center rounded-md border border-border bg-background px-2 text-xs"
+                      >
+                        View Threads
+                      </Link>
+                    </div>
                   </td>
                 </tr>
               ))}
