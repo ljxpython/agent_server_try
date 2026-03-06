@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import {
   ArrowDown,
+  BadgeInfo,
   ChevronDown,
   ChevronUp,
   LoaderCircle,
@@ -942,33 +943,42 @@ function ChatContextPanel({
     .join(" · ");
 
   return (
-    <div className="inline-grid max-w-full gap-1 rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-[11px] text-muted-foreground shadow-sm">
-      <div className="flex items-center justify-between gap-2">
-        <ContextChip label={sourceLabel} prominent />
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {collapsed ? <ChevronDown className="size-3.5" /> : <ChevronUp className="size-3.5" />}
-          <span>{collapsed ? "Expand" : "Collapse"}</span>
-        </button>
-      </div>
+    <div className="inline-grid max-w-full gap-1 text-[11px] text-muted-foreground">
       {collapsed ? (
-        <p className="max-w-[min(70vw,32rem)] truncate font-mono text-[11px] text-muted-foreground" title={summary || sourceLabel}>
-          {summary || sourceLabel}
-        </p>
+        <Button
+          type="button"
+          variant="ghost"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground h-8 w-8 rounded-full p-0"
+          onClick={onToggleCollapsed}
+          title={summary || sourceLabel}
+        >
+          <BadgeInfo className="size-4" />
+        </Button>
       ) : (
-        <>
-      {graphId ? <ContextRow label="graph" value={graphId} /> : null}
-      {assistantId ? <ContextRow label="assistant" value={assistantId} /> : null}
-      {threadId ? (
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/80">thread</span>
-          <ThreadContextChip threadId={threadId} />
+        <div className="inline-grid max-w-full gap-1 rounded-lg border border-border/70 bg-background/80 px-3 py-2 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <ContextChip label={sourceLabel} prominent />
+            <Button
+              type="button"
+              variant="ghost"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground h-8 w-8 rounded-full p-0"
+              onClick={onToggleCollapsed}
+              title="Collapse chat context"
+            >
+              <BadgeInfo className="size-4" />
+            </Button>
+          </div>
+          <>
+            {graphId ? <ContextRow label="graph" value={graphId} /> : null}
+            {assistantId ? <ContextRow label="assistant" value={assistantId} /> : null}
+            {threadId ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground/80">thread</span>
+                <ThreadContextChip threadId={threadId} />
+              </div>
+            ) : null}
+          </>
         </div>
-      ) : null}
-        </>
       )}
     </div>
   );
