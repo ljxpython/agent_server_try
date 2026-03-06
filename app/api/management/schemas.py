@@ -45,7 +45,6 @@ class CreateProjectRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     description: str = Field(default="")
 
-
 class UpsertMemberRequest(BaseModel):
     user_id: str
     role: str
