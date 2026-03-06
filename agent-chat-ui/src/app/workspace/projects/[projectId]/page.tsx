@@ -45,6 +45,10 @@ export default function ProjectDetailPage() {
           Back to Projects
         </Link>
       </div>
+
+      <div className="mt-6 rounded-lg border border-border/80 bg-card/70 p-4">
+        <p className="text-xs text-muted-foreground">Project-scoped entry point. Runtime behavior is configured at the assistant level.</p>
+      </div>
     </section>
   );
 }
