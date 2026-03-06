@@ -179,13 +179,12 @@ make dev-check
 它会检查：
 
 - `http://127.0.0.1:2024/_proxy/health`
-- `http://127.0.0.1:28081/healthz`
 - `http://127.0.0.1:8123/info`
 
 注意：
 
 - `dev-check` 默认假设你的本地代理服务已经跑在 `127.0.0.1:2024`。
-- 如果你还没启动本地后端，`health` 检查会失败，但 OpenFGA / Runtime 可能仍然是通的。
+- 如果你还没启动本地后端，`health` 检查会失败，但 Runtime 可能仍然是通的。
 
 ### 5.3 关闭隧道
 
@@ -209,8 +208,9 @@ bash scripts/dev_tunnel_down.sh
 
 这个模板的核心思想是：
 
-- 所有远端依赖都改成连本机隧道端口。
-- 不走本地开发绕过认证，而是保留真实认证链路。
+- 当前后端真正使用的远端依赖，主要是 Runtime 和数据库。
+- 认证改为仓库内自建 JWT，不再依赖 Keycloak / OpenFGA 配置项。
+- 隧道仍然会额外暴露 Keycloak / OpenFGA / Ollama 端口，但它们现在属于可选联调能力，不是当前后端主链路必填项。
 
 ### 6.1 推荐起步方式
 
@@ -221,8 +221,9 @@ cp config/environments/.env.dev.tunnel.example .env
 然后按你的真实环境补齐敏感值，例如：
 
 - `DATABASE_URL` 里的 PostgreSQL 密码
-- `OPENFGA_STORE_ID`
-- `OPENFGA_MODEL_ID`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `BOOTSTRAP_ADMIN_PASSWORD`
 
 ### 6.2 关键配置解释
 
@@ -231,31 +232,26 @@ cp config/environments/.env.dev.tunnel.example .env
 ```env
 LANGGRAPH_UPSTREAM_URL=http://127.0.0.1:8123
 
-DEV_AUTH_BYPASS_ENABLED=false
-DEV_AUTH_BYPASS_MEMBERSHIP_ENABLED=false
+AUTH_REQUIRED=true
+LANGGRAPH_AUTH_REQUIRED=true
+LANGGRAPH_SCOPE_GUARD_ENABLED=true
 
 PLATFORM_DB_ENABLED=true
 PLATFORM_DB_AUTO_CREATE=false
 DATABASE_URL=postgresql+psycopg://agent:<pg-password>@127.0.0.1:15432/agent_platform
 
-KEYCLOAK_AUTH_ENABLED=true
-KEYCLOAK_AUTH_REQUIRED=true
-KEYCLOAK_ISSUER=http://127.0.0.1:28080/realms/agent-platform
-KEYCLOAK_AUDIENCE=agent-proxy
+JWT_ACCESS_SECRET=<set-a-local-dev-secret>
+JWT_REFRESH_SECRET=<set-a-local-dev-secret>
 
-OPENFGA_ENABLED=true
-OPENFGA_AUTHZ_ENABLED=true
-OPENFGA_URL=http://127.0.0.1:28081
-OPENFGA_STORE_ID=<store-id>
-OPENFGA_MODEL_ID=<model-id>
+BOOTSTRAP_ADMIN_USERNAME=admin
+BOOTSTRAP_ADMIN_PASSWORD=<set-a-local-dev-password>
 ```
 
 你可以这样理解：
 
-- `127.0.0.1:28080` 其实是远端 Keycloak
-- `127.0.0.1:28081` 其实是远端 OpenFGA
 - `127.0.0.1:15432` 其实是远端 PostgreSQL
 - `127.0.0.1:8123` 其实是远端 Runtime
+- `127.0.0.1:28080` / `127.0.0.1:28081` / `127.0.0.1:11143` 是脚本顺带暴露出来的可选远端服务端口
 
 所以 `.env` 看起来像在连本机，实际上是在借 SSH 隧道连远端。
 
@@ -456,7 +452,6 @@ No matching tunnel process found.
 当前 `Makefile` 里的 `dev-check` 只检查：
 
 - 本地代理健康接口
-- OpenFGA 健康接口
 - Runtime 信息接口
 
 这意味着它是一个“最小可用检查”，不是“所有隧道端口的完整巡检”。
