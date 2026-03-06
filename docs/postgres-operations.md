@@ -110,22 +110,14 @@ uv run alembic downgrade -1
 - 每次迁移前先执行一次手动备份。
 - 所有 schema 变更必须走迁移脚本，禁止手工直改生产库。
 
-## RBAC 回滚脚本（Step 2）
+## RBAC 回滚说明（当前版本）
 
-当租户成员角色配置错误时，可用脚本直接回滚：
+旧的 `scripts/rbac_membership_rollback.py` 已不在当前仓库中维护。
 
-```bash
-PLATFORM_DB_ENABLED=true \
-DATABASE_URL="postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform" \
-uv run python scripts/rbac_membership_rollback.py \
-  --tenant-ref <tenant-slug-or-id> \
-  --user-ref <user-id-or-external-subject> \
-  --target-role member \
-  --sync-openfga
-```
+当前版本采用自建认证与项目级 RBAC，成员角色回滚应通过：
 
-参数说明：
+- 管理接口直接修正成员角色
+- 数据库备份/恢复流程回退错误变更
+- 必要时结合 Alembic 迁移回滚数据库结构变更
 
-- `--target-role owner|admin|member|none`
-- `none` 表示删除 membership
-- `--sync-openfga` 会同步回滚 OpenFGA tenant 角色 tuple
+如果后续需要“一键回滚成员角色”的运维能力，建议以当前 `/_management/*` 接口和自建 RBAC 模型为基础重新实现，而不是恢复旧的 Keycloak/OpenFGA 时代脚本。

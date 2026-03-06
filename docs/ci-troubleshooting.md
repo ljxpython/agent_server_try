@@ -54,12 +54,13 @@ pnpm build
 后端至少保证：
 
 - `AUTH_REQUIRED`（按环境）
-- `JWT_SECRET`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
 - `DATABASE_URL`（启用 DB 时）
 
 前端至少保证：
 
-- `NEXT_PUBLIC_API_URL` 或 `NEXT_PUBLIC_PLATFORM_API_URL`
+- `NEXT_PUBLIC_API_URL`
 
 ## 4. 排查顺序（推荐）
 
