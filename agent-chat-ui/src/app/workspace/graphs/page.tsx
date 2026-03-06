@@ -110,7 +110,7 @@ export default function GraphsPage() {
 
       <ListSearch
         value={searchInput}
-        placeholder="Search by graph id"
+        placeholder="Search by graph id or description"
         onValueChange={setSearchInput}
         onSearch={(keyword) => {
           setOffset(0);
@@ -160,11 +160,19 @@ export default function GraphsPage() {
                   />
                 </th>
                 <th className="relative px-4 py-2">
-                  Actions
+                  Description
                   <ColumnResizeHandle
                     active={resizingColumnIndex === 2}
                     onMouseDown={(event) => startResize(2, event)}
                     onDoubleClick={() => resetColumnWidth(2)}
+                  />
+                </th>
+                <th className="relative px-4 py-2">
+                  Actions
+                  <ColumnResizeHandle
+                    active={resizingColumnIndex === 3}
+                    onMouseDown={(event) => startResize(3, event)}
+                    onDoubleClick={() => resetColumnWidth(3)}
                   />
                 </th>
               </tr>
@@ -180,6 +188,9 @@ export default function GraphsPage() {
                   </td>
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">
                     {item.graph_id}
+                  </td>
+                  <td className="max-w-xl px-4 py-2 text-sm text-muted-foreground">
+                    {item.description?.trim() ? item.description : "-"}
                   </td>
                   <td className="px-4 py-2">
                     <button

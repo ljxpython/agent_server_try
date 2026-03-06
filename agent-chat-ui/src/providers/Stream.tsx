@@ -79,7 +79,7 @@ async function checkGraphStatus(
 async function fetchGraphs(
   apiUrl: string,
   authHeaders: Record<string, string>,
-): Promise<string[]> {
+): Promise<Array<{ graph_id: string; description?: string }>> {
   try {
     const response = await fetch(`${apiUrl}/graphs/search`, {
       method: "POST",
@@ -96,15 +96,23 @@ async function fetchGraphs(
     }
 
     const payload = (await response.json()) as {
-      items?: Array<{ graph_id?: string }>;
+      items?: Array<{ graph_id?: string; description?: string | null }>;
     };
     if (!Array.isArray(payload.items)) {
       return [];
     }
 
-    return payload.items
-      .map((item) => (typeof item?.graph_id === "string" ? item.graph_id : ""))
-      .filter(Boolean);
+    return payload.items.reduce<Array<{ graph_id: string; description?: string }>>((acc, item) => {
+      const graphId = typeof item?.graph_id === "string" ? item.graph_id : "";
+      if (!graphId) {
+        return acc;
+      }
+      acc.push({
+        graph_id: graphId,
+        description: typeof item?.description === "string" ? item.description : undefined,
+      });
+      return acc;
+    }, []);
   } catch {
     return [];
   }
@@ -113,6 +121,11 @@ async function fetchGraphs(
 type AssistantOption = {
   assistant_id: string;
   name?: string | null;
+};
+
+type GraphOption = {
+  graph_id: string;
+  description?: string;
 };
 
 async function fetchAssistants(
@@ -339,7 +352,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
   });
   const normalizedTargetType = targetType === "graph" ? "graph" : "assistant";
   const [assistantOptions, setAssistantOptions] = useState<AssistantOption[]>([]);
-  const [graphOptions, setGraphOptions] = useState<string[]>([]);
+  const [graphOptions, setGraphOptions] = useState<GraphOption[]>([]);
   const [isGraphOptionsLoading, setIsGraphOptionsLoading] = useState(false);
 
   const [apiKey, _setApiKey] = useState(() => {
@@ -583,12 +596,14 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
                         ? "Select graph"
                         : "No graph options"}
                   </option>
-                  {graphOptions.map((graphId) => (
+                  {graphOptions.map((graph) => (
                     <option
-                      key={graphId}
-                      value={graphId}
+                      key={graph.graph_id}
+                      value={graph.graph_id}
                     >
-                      {graphId}
+                      {graph.description?.trim()
+                        ? `${graph.graph_id} — ${graph.description}`
+                        : graph.graph_id}
                     </option>
                   ))}
                 </select>

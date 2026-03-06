@@ -43,7 +43,7 @@ export default function CreateAssistantPage() {
   const router = useRouter();
   const { projectId } = useWorkspaceContext();
   const [graphId, setGraphId] = useState("assistant");
-  const [graphOptions, setGraphOptions] = useState<string[]>([]);
+  const [graphOptions, setGraphOptions] = useState<Array<{ graph_id: string; description?: string }>>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -156,9 +156,11 @@ export default function CreateAssistantPage() {
     })
       .then((payload) => {
         const next = payload.items
-          .map((item) => item.graph_id)
-          .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
-        setGraphOptions(next);
+          .filter(
+            (item): item is { graph_id: string; description?: string } =>
+              typeof item.graph_id === "string" && item.graph_id.trim().length > 0,
+          )
+          setGraphOptions(next);
       })
       .catch(() => setGraphOptions([]))
       .finally(() => setGraphLoading(false));
@@ -374,8 +376,8 @@ export default function CreateAssistantPage() {
           />
           <datalist id="assistant-graph-options">
             {graphOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
+              <option key={option.graph_id} value={option.graph_id} label={option.description?.trim() ? `${option.graph_id} — ${option.description}` : option.graph_id}>
+                {option.description?.trim() ? `${option.graph_id} — ${option.description}` : option.graph_id}
               </option>
             ))}
           </datalist>

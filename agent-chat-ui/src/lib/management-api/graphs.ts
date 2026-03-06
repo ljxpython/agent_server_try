@@ -2,6 +2,7 @@ import { createManagementApiClient } from "./client";
 
 export type ManagementGraph = {
   graph_id: string;
+  description?: string;
 };
 
 type GraphListResponse = {
