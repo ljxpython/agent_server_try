@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-import logging
-
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 
 from app.api.management import router as management_router
-from app.api.frontend_passthrough import router as frontend_passthrough_router
 from app.api.langgraph import router as langgraph_router
-from app.api.proxy.runtime_passthrough import passthrough_request
 from app.bootstrap.lifespan import lifespan
 from app.config import load_settings
 from app.logging_setup import setup_backend_logging
@@ -24,7 +19,6 @@ def create_app() -> FastAPI:
     settings = load_settings()
     setup_backend_logging(settings)
 
-    logger = logging.getLogger("proxy")
     app = FastAPI(
         title="LangGraph Transparent Proxy",
         version="0.1.0",
@@ -37,7 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(management_router)
     app.include_router(langgraph_router)
-    app.include_router(frontend_passthrough_router)
+    # app.include_router(frontend_passthrough_router)
 
     app.add_middleware(
         CORSMiddleware,
@@ -55,18 +49,18 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.api_route(
-        "/_runtime/{full_path:path}",
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
-    )
-    async def runtime_passthrough(request: Request, full_path: str) -> Response:
-        return await passthrough_request(request=request, full_path=full_path, settings=settings, logger=logger)
+    # @app.api_route(
+    #     "/_runtime/{full_path:path}",
+    #     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    # )
+    # async def runtime_passthrough(request: Request, full_path: str) -> Response:
+    #     return await passthrough_request(request=request, full_path=full_path, settings=settings, logger=logger)
 
-    @app.api_route(
-        "/{full_path:path}",
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
-    )
-    async def passthrough(request: Request, full_path: str) -> Response:
-        return await passthrough_request(request=request, full_path=full_path, settings=settings, logger=logger)
+    # @app.api_route(
+    #     "/{full_path:path}",
+    #     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    # )
+    # async def passthrough(request: Request, full_path: str) -> Response:
+    #     return await passthrough_request(request=request, full_path=full_path, settings=settings, logger=logger)
 
     return app
