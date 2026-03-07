@@ -11,6 +11,7 @@ import { DEFAULT_PAGE_SIZE_OPTIONS, PaginationControls } from "@/components/plat
 import {
   deleteAssistant,
   listAssistantsPage,
+  resyncAssistant,
   type ManagementAssistant,
   updateAssistant,
 } from "@/lib/management-api/assistants";
@@ -52,6 +53,7 @@ export default function AssistantsPage() {
   const [customPage, setCustomPage] = useState("1");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resyncingId, setResyncingId] = useState<string | null>(null);
 
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -70,7 +72,7 @@ export default function AssistantsPage() {
   const [runtimeToolNames, setRuntimeToolNames] = useState<string[]>([]);
 
   const { columnWidths, startResize, resetColumnWidth, resizingColumnIndex } = useResizableColumns(
-    [70, 180, 180, 220, 120, 260],
+    [70, 180, 180, 220, 160, 220, 260],
     { storageKey: "table-columns-assistants" },
   );
   const tableWidth = Math.max(960, columnWidths.reduce((sum, width) => sum + width, 0));
@@ -266,6 +268,24 @@ export default function AssistantsPage() {
     }
   }
 
+  async function onResync(item: ManagementAssistant) {
+    if (!projectId) {
+      return;
+    }
+    setResyncingId(item.id);
+    setError(null);
+    setNotice(null);
+    try {
+      await resyncAssistant(item.id, projectId);
+      setNotice(`Assistant resynced: ${item.name}`);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resync assistant");
+    } finally {
+      setResyncingId(null);
+    }
+  }
+
   return (
     <section className="p-4 sm:p-6">
       <h2 className="text-xl font-semibold tracking-tight">Assistants</h2>
@@ -307,7 +327,7 @@ export default function AssistantsPage() {
           <table className="min-w-full text-sm" style={{ width: tableWidth }}>
             <thead className="bg-muted/60 text-left">
               <tr>
-                {["#", "Name", "Graph", "LangGraph Assistant ID", "Status", "Actions"].map((title, columnIndex) => (
+                {["#", "Name", "Graph", "LangGraph Assistant ID", "Status", "Sync", "Actions"].map((title, columnIndex) => (
                   <th
                     key={title}
                     className="relative border-b border-border px-3 py-2 font-medium text-foreground"
@@ -331,6 +351,11 @@ export default function AssistantsPage() {
                   <td className="px-3 py-2">{item.graph_id}</td>
                   <td className="px-3 py-2 font-mono text-xs">{item.langgraph_assistant_id}</td>
                   <td className="px-3 py-2">{item.status}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">
+                    <div>{item.sync_status}</div>
+                    {item.last_synced_at ? <div>{new Date(item.last_synced_at).toLocaleString()}</div> : null}
+                    {item.last_sync_error ? <div className="text-red-600">{item.last_sync_error}</div> : null}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-2">
                       <Link
@@ -354,6 +379,14 @@ export default function AssistantsPage() {
                       >
                         View Threads
                       </Link>
+                      <button
+                        type="button"
+                        className="inline-flex h-8 items-center rounded-md border border-border px-2 text-xs"
+                        disabled={resyncingId === item.id}
+                        onClick={() => void onResync(item)}
+                      >
+                        {resyncingId === item.id ? "Resyncing..." : "Resync"}
+                      </button>
                       <button
                         type="button"
                         className="inline-flex h-8 items-center rounded-md border border-border px-2 text-xs"

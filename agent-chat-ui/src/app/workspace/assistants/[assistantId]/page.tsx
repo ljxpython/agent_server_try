@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   getAssistant,
   getAssistantParameterSchema,
+  resyncAssistant,
   type ManagementAssistant,
   updateAssistant,
 } from "@/lib/management-api/assistants";
@@ -53,6 +54,7 @@ export default function AssistantDetailPage() {
   const [schema, setSchema] = useState<ParameterSchemaResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -186,6 +188,31 @@ export default function AssistantDetailPage() {
     }
   }
 
+  async function onResync() {
+    if (!assistantId || !projectId) {
+      return;
+    }
+    setResyncing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const updated = await resyncAssistant(assistantId, projectId);
+      setItem(updated);
+      setEditName(updated.name);
+      setEditDescription(updated.description || "");
+      setEditGraphId(updated.graph_id);
+      setEditStatus(updated.status === "disabled" ? "disabled" : "active");
+      setEditConfig(stringifyJson(updated.config));
+      setEditContext(stringifyJson(updated.context));
+      setEditMetadata(stringifyJson(updated.metadata));
+      setNotice("Assistant resynced.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resync assistant");
+    } finally {
+      setResyncing(false);
+    }
+  }
+
   return (
     <section className="p-4 sm:p-6">
       <h2 className="text-xl font-semibold tracking-tight">Assistant Detail</h2>
@@ -199,6 +226,9 @@ export default function AssistantDetailPage() {
         <div className="mt-4 grid gap-3 rounded-lg border border-border/80 bg-card/70 p-4">
           <p className="text-sm"><span className="text-muted-foreground">ID:</span> <code>{item.id}</code></p>
           <p className="text-sm"><span className="text-muted-foreground">LangGraph Assistant ID:</span> <code>{item.langgraph_assistant_id}</code></p>
+          <p className="text-sm"><span className="text-muted-foreground">Sync:</span> <code>{item.sync_status}</code></p>
+          {item.last_synced_at ? <p className="text-sm"><span className="text-muted-foreground">Last synced:</span> <code>{new Date(item.last_synced_at).toLocaleString()}</code></p> : null}
+          {item.last_sync_error ? <p className="text-sm text-red-600">{item.last_sync_error}</p> : null}
 
           <label className="grid gap-1 text-xs font-medium text-muted-foreground">
             Name
@@ -304,6 +334,14 @@ export default function AssistantDetailPage() {
               disabled={saving}
             >
               {saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center justify-center rounded-md border border-border bg-background px-3 text-sm disabled:opacity-50"
+              onClick={() => void onResync()}
+              disabled={resyncing}
+            >
+              {resyncing ? "Resyncing..." : "Resync"}
             </button>
           </div>
         </div>
