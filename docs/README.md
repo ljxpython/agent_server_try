@@ -9,6 +9,7 @@
 - `docs/postgres-operations.md`：PostgreSQL 容器启动、停止、备份与迁移手册。
 - `docs/code-architecture.md`：当前与目标代码架构设计。
 - `docs/assistant-management-design.md`：Assistant 管理页面与前后端接口落地方案。
+- `docs/runtime-object-catalog-design.md`：Graph / Assistant / Model / Tool 四类对象的平台库表结构与同步策略设计。
 - `docs/self-hosted-auth-rbac-mvp.md`：自建认证与权限系统 MVP 决策稿（去 Keycloak/OpenFGA）。
 - `docs/error-playbook.md`：已遇到问题与修复手册（防踩坑）。
 - `docs/testing.md`：自动化冒烟测试脚本与运行方式。
