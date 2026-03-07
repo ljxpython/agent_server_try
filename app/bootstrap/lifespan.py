@@ -8,7 +8,7 @@ import httpx
 from fastapi import FastAPI
 
 from app.config import Settings
-from app.db.access import count_users, create_user_account
+from app.db.access import count_super_admins, create_user_account, get_user_by_username
 from app.db.init_db import create_core_tables
 from app.db.session import build_engine, build_session_factory, session_scope
 from app.security.password import hash_password
@@ -20,15 +20,32 @@ logger = logging.getLogger("proxy")
 def _ensure_bootstrap_admin(app: FastAPI, settings: Settings) -> None:
     session_factory = app.state.db_session_factory
     with session_scope(session_factory) as session:
-        if count_users(session) > 0:
+        bootstrap_user = get_user_by_username(session, settings.bootstrap_admin_username)
+        if bootstrap_user is None:
+            if count_super_admins(session) > 0:
+                return
+            create_user_account(
+                session,
+                username=settings.bootstrap_admin_username,
+                password_hash=hash_password(settings.bootstrap_admin_password),
+                is_super_admin=True,
+            )
+            logger.warning("bootstrap_admin_created username=%s", settings.bootstrap_admin_username)
             return
-        create_user_account(
-            session,
-            username=settings.bootstrap_admin_username,
-            password_hash=hash_password(settings.bootstrap_admin_password),
-            is_super_admin=True,
-        )
-        logger.warning("bootstrap_admin_created username=%s", settings.bootstrap_admin_username)
+
+        changed = False
+        if bootstrap_user.status != "active":
+            bootstrap_user.status = "active"
+            changed = True
+        if not bootstrap_user.is_super_admin:
+            bootstrap_user.is_super_admin = True
+            changed = True
+        if not bootstrap_user.password_hash:
+            bootstrap_user.password_hash = hash_password(settings.bootstrap_admin_password)
+            changed = True
+        if changed:
+            session.flush()
+            logger.warning("bootstrap_admin_reconciled username=%s", settings.bootstrap_admin_username)
 
 
 @asynccontextmanager

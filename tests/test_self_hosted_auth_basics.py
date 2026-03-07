@@ -21,7 +21,7 @@ def _settings() -> Settings:
         proxy_log_level="INFO",
         platform_db_enabled=True,
         platform_db_auto_create=False,
-        database_url="postgresql://x:y@localhost:5432/z",
+        database_url="postgresql+psycopg://x:y@localhost:5432/z",
         auth_required=True,
         langgraph_auth_required=False,
         langgraph_scope_guard_enabled=False,

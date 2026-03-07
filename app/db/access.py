@@ -55,6 +55,11 @@ def count_users(session: Session) -> int:
     return int(session.scalar(select(func.count()).select_from(User)) or 0)
 
 
+def count_super_admins(session: Session) -> int:
+    stmt = select(func.count()).select_from(User).where(User.is_super_admin.is_(True), User.status == "active")
+    return int(session.scalar(stmt) or 0)
+
+
 def list_users(
     session: Session,
     limit: int = 100,
