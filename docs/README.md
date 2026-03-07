@@ -5,6 +5,7 @@
 - `docs/management-console-overview.md`：管理界面功能总览（Project/User/Audit/My Profile）。
 - `docs/dev-tunnel-guide.md`：SSH 开发隧道教学文档（`scripts/dev_tunnel_up.sh` / `scripts/dev_tunnel_down.sh` 的用途、用法与排障）。
 - `docs/langgraph-passthrough-guide.md`：LangGraph 同构入参与出参透传教学文档（`app/api/langgraph`、前端兼容透传、底层 runtime 透传的关系与实现）。
+- `docs/chat-file-upload-guide.md`：Chat 页面图片 / PDF 上传链路教学文档（前端编码、多模态消息结构、平台层接收数据、扩展更多类型时的改造点）。
 - `docs/postgres-operations.md`：PostgreSQL 容器启动、停止、备份与迁移手册。
 - `docs/code-architecture.md`：当前与目标代码架构设计。
 - `docs/assistant-management-design.md`：Assistant 管理页面与前后端接口落地方案。

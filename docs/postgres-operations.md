@@ -6,11 +6,18 @@
 
 ## 一次性创建并启动容器
 
+先约定两个变量，后面命令都用它们：
+
+```bash
+export PG_CONTAINER=agent-postgres
+export PG_PASSWORD='<set-a-strong-password>'
+```
+
 ```bash
 docker run -d \
-  --name agent-platform-pg \
+  --name "$PG_CONTAINER" \
   -e POSTGRES_USER=agent \
-  -e POSTGRES_PASSWORD=agent_pwd \
+  -e POSTGRES_PASSWORD="$PG_PASSWORD" \
   -e POSTGRES_DB=agent_platform \
   -p 5432:5432 \
   -v agent_platform_pgdata:/var/lib/postgresql/data \
@@ -22,9 +29,9 @@ docker run -d \
 
 ```bash
 docker run -d \
-  --name agent-platform-pg \
+  --name "$PG_CONTAINER" \
   -e POSTGRES_USER=agent \
-  -e POSTGRES_PASSWORD=agent_pwd \
+  -e POSTGRES_PASSWORD="$PG_PASSWORD" \
   -e POSTGRES_DB=agent_platform \
   -p 5432:5432 \
   -v agent_platform_pgdata:/var/lib/postgresql/data \
@@ -40,28 +47,28 @@ docker run -d \
 
 ```bash
 # 启动
-docker start agent-platform-pg
+docker start "$PG_CONTAINER"
 
 # 停止
-docker stop agent-platform-pg
+docker stop "$PG_CONTAINER"
 
 # 重启
-docker restart agent-platform-pg
+docker restart "$PG_CONTAINER"
 
 # 查看日志
-docker logs -f agent-platform-pg
+docker logs -f "$PG_CONTAINER"
 ```
 
 ## 连接测试
 
 ```bash
-docker exec -it agent-platform-pg psql -U agent -d agent_platform -c "SELECT version();"
+docker exec -it "$PG_CONTAINER" psql -U agent -d agent_platform -c "SELECT version();"
 ```
 
 ## 备份（逻辑备份）
 
 ```bash
-docker exec agent-platform-pg \
+docker exec "$PG_CONTAINER" \
   pg_dump -U agent -d agent_platform -F c -f /backups/agent_platform_$(date +%F_%H%M%S).dump
 ```
 
@@ -73,10 +80,10 @@ docker exec agent-platform-pg \
 
 ```bash
 # 先清空并重建 public schema（谨慎执行）
-docker exec agent-platform-pg psql -U agent -d agent_platform -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker exec "$PG_CONTAINER" psql -U agent -d agent_platform -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 
 # 执行恢复
-docker exec agent-platform-pg \
+docker exec "$PG_CONTAINER" \
   pg_restore -U agent -d agent_platform /backups/<your_dump_file>.dump
 ```
 
@@ -92,7 +99,7 @@ uv add alembic sqlalchemy psycopg[binary]
 uv run alembic init migrations
 
 # 设置连接串（示例）
-export DATABASE_URL="postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform"
+export DATABASE_URL="postgresql+psycopg://agent:${PG_PASSWORD}@127.0.0.1:5432/agent_platform"
 
 # 生成迁移文件
 uv run alembic revision -m "create core platform tables"
@@ -109,6 +116,31 @@ uv run alembic downgrade -1
 - 每天至少一次逻辑备份，保留最近 7 天。
 - 每次迁移前先执行一次手动备份。
 - 所有 schema 变更必须走迁移脚本，禁止手工直改生产库。
+
+## 本地 / 隧道 两种连接口径
+
+- 本地直接连 PostgreSQL：`127.0.0.1:5432`
+- SSH 隧道连远端 PostgreSQL：`127.0.0.1:15432`
+- 对应用来说，两者都只是不同的 `DATABASE_URL`；项目已经统一按 PostgreSQL 使用。
+
+## SQLite 历史数据迁移到 PostgreSQL
+
+如果你手头还有历史 SQLite 文件，可以用仓库自带脚本重新导入到当前 PostgreSQL。
+
+```bash
+# 先确认当前 .env / DATABASE_URL 指向目标 PostgreSQL
+PYTHONPATH=. uv run python scripts/migrate_sqlite_to_postgres.py --dry-run
+
+# 真正执行迁移
+PYTHONPATH=. uv run python scripts/migrate_sqlite_to_postgres.py
+```
+
+说明：
+
+- 默认源库路径是 `data/archive/agent_platform_v3_migrated_20260307.db`
+- 脚本会按依赖顺序整表覆盖导入：`tenants -> users -> projects -> project_members -> refresh_tokens -> agents -> assistant_profiles -> audit_logs`
+- 执行前应先做 PostgreSQL 逻辑备份
+- 当前仓库已经完成过一次正式迁移，备份文件位于 `backups/agent_platform_pre_schema_align.dump` 和 `backups/agent_platform_pre_data_migration.dump`
 
 ## RBAC 回滚说明（当前版本）
 

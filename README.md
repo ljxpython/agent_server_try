@@ -43,6 +43,28 @@ without changing its request paths.
 uv run uvicorn main:app --host 0.0.0.0 --port 2024 --reload
 ```
 
+## Environment loading
+
+- Runtime only reads the repo-root `.env` file.
+- The loading path is `main.py -> app/factory.py -> load_dotenv() -> app/config.py`.
+- `config/environments/*.example` are profile templates for humans to copy into the repo-root `.env` when switching environments.
+
+### Recommended switching workflow
+
+```bash
+# Minimal local runnable setup
+cp .env.example .env
+
+# Local code + local PostgreSQL
+cp config/environments/.env.dev.example .env
+
+# Local code + remote infra over SSH tunnel
+cp config/environments/.env.dev.tunnel.example .env
+
+# Staging / production-like profile
+cp config/environments/.env.staging.example .env
+```
+
 ## Recommended profiles
 
 ### Local development (no login required)
@@ -50,7 +72,7 @@ uv run uvicorn main:app --host 0.0.0.0 --port 2024 --reload
 ```env
 PLATFORM_DB_ENABLED=true
 PLATFORM_DB_AUTO_CREATE=true
-DATABASE_URL=postgresql+psycopg://agent:agent_pwd@127.0.0.1:5432/agent_platform
+DATABASE_URL=postgresql+psycopg://agent:<pg-password>@127.0.0.1:5432/agent_platform
 
 AUTH_REQUIRED=false
 LANGGRAPH_AUTH_REQUIRED=false
@@ -100,6 +122,7 @@ curl http://127.0.0.1:2024/_proxy/health
 - `docs/README.md`
 - `docs/dev-tunnel-guide.md`
 - `docs/langgraph-passthrough-guide.md`
+- `docs/chat-file-upload-guide.md`
 - `docs/management-console-overview.md`
 - `docs/self-hosted-auth-rbac-mvp.md`
 - `docs/postgres-operations.md`
@@ -110,9 +133,20 @@ curl http://127.0.0.1:2024/_proxy/health
 - `docs/logging-system.md`
 - `docs/archive/`（历史文档）
 
+## Data migration status
+
+- 平台库已经统一切到 PostgreSQL。
+- 旧的本地 SQLite 数据已迁入远端 PostgreSQL，并不再作为运行时数据源。
+- 如需再次导入历史 SQLite，请使用 `scripts/migrate_sqlite_to_postgres.py`。
+- 迁移前备份位于 `backups/agent_platform_pre_schema_align.dump` 与 `backups/agent_platform_pre_data_migration.dump`。
+- 历史遗留表 `memberships`、`runtime_bindings` 已从远端 PostgreSQL 清理。
+
 ## Environment templates
 
-- `config/environments/.env.dev.example`
-- `config/environments/.env.dev.tunnel.example`
+- `.env.example`: 最小可运行模板，适合快速本地启动。
+- `config/environments/.env.dev.example`：本地代码 + 本地 PostgreSQL（通常 `127.0.0.1:5432`）
+- `config/environments/.env.dev.tunnel.example`：本地代码 + SSH 隧道远端 PostgreSQL（通常 `127.0.0.1:15432`）
 - `config/environments/.env.staging.example`
 - `config/environments/.env.prod.example`
+
+这些文件不会被程序直接自动读取；真正生效的是你复制出来的根目录 `.env`。
