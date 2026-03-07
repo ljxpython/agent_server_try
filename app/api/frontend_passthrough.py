@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 
+# Retired: routes in this module are no longer mounted in app/factory.py.
 router = APIRouter(prefix="/api", tags=["frontend-passthrough"])
 
 

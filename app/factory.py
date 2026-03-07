@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
 
     app.include_router(management_router)
     app.include_router(langgraph_router)
+    # Retired after frontend verification; keep implementation files for reference only.
     # app.include_router(frontend_passthrough_router)
 
     app.add_middleware(
@@ -49,6 +50,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    # Retired after frontend verification; keep implementation files for reference only.
     # @app.api_route(
     #     "/_runtime/{full_path:path}",
     #     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],

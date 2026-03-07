@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from app.config import Settings
 
 
+# Retired: passthrough entrypoints are no longer mounted in app/factory.py.
 HOP_BY_HOP_HEADERS = {
     "connection",
     "keep-alive",
