@@ -45,6 +45,18 @@ class ManagementApiClient {
     return this.parse<T>(response);
   }
 
+  async put<T>(path: string, payload: unknown): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.defaultHeaders,
+      },
+      body: JSON.stringify(payload),
+    });
+    return this.parse<T>(response);
+  }
+
   async del<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: "DELETE",

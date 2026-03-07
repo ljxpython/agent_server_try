@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -14,6 +15,8 @@ from app.db.access import (
     get_assistant_profile_by_agent_id,
     list_project_agents,
     parse_uuid,
+    update_agent_runtime_fields,
+    update_agent_sync_state,
     upsert_assistant_profile,
 )
 from app.db.session import session_scope
@@ -41,6 +44,9 @@ def _serialize_assistant(row: Any, profile: Any) -> dict[str, Any]:
         "graph_id": row.graph_id,
         "langgraph_assistant_id": row.langgraph_assistant_id,
         "runtime_base_url": row.runtime_base_url,
+        "sync_status": row.sync_status,
+        "last_sync_error": row.last_sync_error,
+        "last_synced_at": row.last_synced_at,
         "status": profile.status if profile is not None else "active",
         "config": profile.config if profile is not None else {},
         "context": profile.context if profile is not None else {},
@@ -226,9 +232,30 @@ async def update_assistant(
             service = LangGraphAssistantsService(request)
             try:
                 await service.update(row.langgraph_assistant_id, update_payload)
+                update_agent_sync_state(
+                    session,
+                    row,
+                    sync_status="ready",
+                    last_sync_error=None,
+                    last_synced_at=datetime.now(timezone.utc),
+                )
             except HTTPException:
+                update_agent_sync_state(
+                    session,
+                    row,
+                    sync_status="error",
+                    last_sync_error="assistant_upstream_update_failed",
+                    last_synced_at=datetime.now(timezone.utc),
+                )
                 raise
             except Exception as exc:
+                update_agent_sync_state(
+                    session,
+                    row,
+                    sync_status="error",
+                    last_sync_error=str(exc),
+                    last_synced_at=datetime.now(timezone.utc),
+                )
                 raise HTTPException(status_code=502, detail="assistant_upstream_update_failed") from exc
 
         row.graph_id = next_graph_id
@@ -268,13 +295,116 @@ async def delete_assistant_item(
             service = LangGraphAssistantsService(request)
             try:
                 await service.delete(row.langgraph_assistant_id, delete_threads=delete_threads)
+                update_agent_sync_state(
+                    session,
+                    row,
+                    sync_status="ready",
+                    last_sync_error=None,
+                    last_synced_at=datetime.now(timezone.utc),
+                )
             except HTTPException:
+                update_agent_sync_state(
+                    session,
+                    row,
+                    sync_status="error",
+                    last_sync_error="assistant_upstream_delete_failed",
+                    last_synced_at=datetime.now(timezone.utc),
+                )
                 raise
             except Exception as exc:
+                update_agent_sync_state(
+                    session,
+                    row,
+                    sync_status="error",
+                    last_sync_error=str(exc),
+                    last_synced_at=datetime.now(timezone.utc),
+                )
                 raise HTTPException(status_code=502, detail="assistant_upstream_delete_failed") from exc
 
         delete_agent(session, row)
         return {"ok": True}
+
+
+@router.post("/assistants/{assistant_id}/resync")
+async def resync_assistant_item(request: Request, assistant_id: str) -> dict[str, Any]:
+    assistant_uuid = parse_uuid(assistant_id)
+    if assistant_uuid is None:
+        raise HTTPException(status_code=400, detail="invalid_assistant_id")
+
+    session_factory = require_db_session_factory(request)
+    actor_user_id = current_user_id_from_request(request)
+    with session_scope(session_factory) as session:
+        row = get_agent_by_id(session, assistant_uuid)
+        if row is None:
+            raise HTTPException(status_code=404, detail="assistant_not_found")
+        require_project_role(request, row.project_id, allowed_roles={"admin", "editor"})
+        profile = get_assistant_profile_by_agent_id(session, row.id)
+
+        service = LangGraphAssistantsService(request)
+        try:
+            upstream_item = await service.get(row.langgraph_assistant_id)
+        except HTTPException:
+            update_agent_sync_state(
+                session,
+                row,
+                sync_status="error",
+                last_sync_error="assistant_upstream_resync_failed",
+                last_synced_at=datetime.now(timezone.utc),
+            )
+            raise
+        except Exception as exc:
+            update_agent_sync_state(
+                session,
+                row,
+                sync_status="error",
+                last_sync_error=str(exc),
+                last_synced_at=datetime.now(timezone.utc),
+            )
+            raise HTTPException(status_code=502, detail="assistant_upstream_resync_failed") from exc
+
+        if not isinstance(upstream_item, dict):
+            update_agent_sync_state(
+                session,
+                row,
+                sync_status="error",
+                last_sync_error="assistant_upstream_invalid_response",
+                last_synced_at=datetime.now(timezone.utc),
+            )
+            raise HTTPException(status_code=502, detail="assistant_upstream_invalid_response")
+
+        next_graph_id = str(upstream_item.get("graph_id") or row.graph_id)
+        next_name = str(upstream_item.get("name") or row.name)
+        next_description = str(upstream_item.get("description") or row.description)
+        next_config = upstream_item.get("config") if isinstance(upstream_item.get("config"), dict) else (profile.config if profile is not None else {})
+        next_context = upstream_item.get("context") if isinstance(upstream_item.get("context"), dict) else (profile.context if profile is not None else {})
+        next_metadata = upstream_item.get("metadata") if isinstance(upstream_item.get("metadata"), dict) else (profile.metadata_json if profile is not None else {})
+        next_metadata = _normalize_metadata(str(row.project_id), next_metadata)
+
+        update_agent_runtime_fields(
+            session,
+            row,
+            graph_id=next_graph_id,
+            name=next_name,
+            description=next_description,
+            runtime_base_url=request.app.state.settings.langgraph_upstream_url,
+        )
+        update_agent_sync_state(
+            session,
+            row,
+            sync_status="ready",
+            last_sync_error=None,
+            last_synced_at=datetime.now(timezone.utc),
+        )
+        profile = upsert_assistant_profile(
+            session,
+            agent_id=row.id,
+            status=profile.status if profile is not None else "active",
+            config=next_config,
+            context=next_context,
+            metadata_json=next_metadata,
+            actor_user_id=actor_user_id,
+        )
+        return _serialize_assistant(row, profile)
 
 
 @router.get("/graphs/{graph_id}/assistant-parameter-schema")
