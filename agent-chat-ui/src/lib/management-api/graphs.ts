@@ -1,15 +1,20 @@
 import { createManagementApiClient } from "./client";
 
 export type ManagementGraph = {
+  id: string;
+  runtime_id: string;
   graph_id: string;
+  display_name: string;
   description?: string;
+  source_type: string;
+  sync_status: string;
+  last_synced_at: string | null;
 };
 
 type GraphListResponse = {
   items: ManagementGraph[];
   total: number;
-  limit: number;
-  offset: number;
+  last_synced_at?: string | null;
 };
 
 export async function listGraphsPage(
@@ -21,12 +26,38 @@ export async function listGraphsPage(
     headers: projectId ? { "x-project-id": projectId } : {},
   });
   if (!client) {
-    return { items: [], total: 0, limit: options?.limit ?? 20, offset: options?.offset ?? 0 };
+    return { items: [], total: 0, last_synced_at: null };
   }
 
-  return client.post<GraphListResponse>("/api/langgraph/graphs/search", {
-    limit: options?.limit ?? 20,
-    offset: options?.offset ?? 0,
-    query: options?.query?.trim() || undefined,
+  const payload = await client.get<GraphListResponse>("/_management/catalog/graphs");
+  const normalizedQuery = options?.query?.trim().toLowerCase() || "";
+  const filtered = normalizedQuery
+    ? payload.items.filter(
+        (item) =>
+          item.graph_id.toLowerCase().includes(normalizedQuery) ||
+          item.display_name.toLowerCase().includes(normalizedQuery) ||
+          (item.description || "").toLowerCase().includes(normalizedQuery),
+      )
+    : payload.items;
+  const limit = options?.limit ?? 20;
+  const offset = options?.offset ?? 0;
+  return {
+    items: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+    last_synced_at: payload.last_synced_at ?? null,
+  };
+}
+
+
+export async function refreshGraphsCatalog(
+  projectId?: string,
+): Promise<{ ok: boolean; count: number; last_synced_at: string | null }> {
+  const client = createManagementApiClient({
+    requireAuth: false,
+    headers: projectId ? { "x-project-id": projectId } : {},
   });
+  if (!client) {
+    throw new Error("management_api_unavailable");
+  }
+  return client.post("/_management/catalog/graphs/refresh", {});
 }

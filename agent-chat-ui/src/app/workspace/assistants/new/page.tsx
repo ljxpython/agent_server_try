@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { createAssistant, getAssistantParameterSchema } from "@/lib/management-api/assistants";
-import { listGraphsPage } from "@/lib/management-api/graphs";
+import { listGraphsPage, type ManagementGraph } from "@/lib/management-api/graphs";
 import { listRuntimeModels, listRuntimeTools, type RuntimeModelItem, type RuntimeToolItem } from "@/lib/management-api/runtime";
 import { useWorkspaceContext } from "@/providers/WorkspaceContext";
 
@@ -43,7 +43,7 @@ export default function CreateAssistantPage() {
   const router = useRouter();
   const { projectId } = useWorkspaceContext();
   const [graphId, setGraphId] = useState("assistant");
-  const [graphOptions, setGraphOptions] = useState<Array<{ graph_id: string; description?: string }>>([]);
+  const [graphOptions, setGraphOptions] = useState<ManagementGraph[]>([]);
   const [graphLoading, setGraphLoading] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -157,10 +157,10 @@ export default function CreateAssistantPage() {
       .then((payload) => {
         const next = payload.items
           .filter(
-            (item): item is { graph_id: string; description?: string } =>
+            (item): item is ManagementGraph =>
               typeof item.graph_id === "string" && item.graph_id.trim().length > 0,
           )
-          setGraphOptions(next);
+        setGraphOptions(next);
       })
       .catch(() => setGraphOptions([]))
       .finally(() => setGraphLoading(false));

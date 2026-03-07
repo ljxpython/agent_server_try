@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ColumnResizeHandle, useResizableColumns } from "@/components/platform/column-resize";
 import { ListSearch } from "@/components/platform/list-search";
+import { Button } from "@/components/ui/button";
 import {
   PageStateEmpty,
   PageStateError,
@@ -16,6 +17,7 @@ import {
   PaginationControls,
 } from "@/components/platform/pagination-controls";
 import {
+  refreshGraphsCatalog,
   listGraphsPage,
   type ManagementGraph,
 } from "@/lib/management-api/graphs";
@@ -33,10 +35,11 @@ export default function GraphsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
-  const graphColumnKeys = ["index", "graph_id", "actions"] as const;
+  const graphColumnKeys = ["index", "graph_id", "description", "sync", "actions"] as const;
   const { columnWidths, startResize, resetColumnWidth, resizingColumnIndex } =
-    useResizableColumns([80, 520, 220], {
+    useResizableColumns([80, 320, 300, 180, 220], {
       storageKey: "table-columns-graphs",
     });
   const tableWidth = Math.max(
@@ -55,6 +58,7 @@ export default function GraphsPage() {
       });
       setItems(payload.items);
       setTotal(payload.total);
+      setLastSyncedAt(payload.last_synced_at ?? null);
       if (payload.total > 0 && offset >= payload.total) {
         const fallbackOffset = Math.max(
           0,
@@ -70,6 +74,26 @@ export default function GraphsPage() {
           ? requestError.message
           : "Failed to load graphs",
       );
+    } finally {
+      setLoading(false);
+    }
+  }, [offset, pageSize, projectId, query]);
+
+  const refreshFromRuntime = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await refreshGraphsCatalog(projectId || undefined);
+      const payload = await listGraphsPage(projectId, {
+        limit: pageSize,
+        offset,
+        query,
+      });
+      setItems(payload.items);
+      setTotal(payload.total);
+      setLastSyncedAt(payload.last_synced_at ?? null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to refresh graphs");
     } finally {
       setLoading(false);
     }
@@ -104,10 +128,18 @@ export default function GraphsPage() {
 
   return (
     <section className="p-4 sm:p-6">
-      <h2 className="text-xl font-semibold tracking-tight">Graphs</h2>
-      <p className="text-muted-foreground mt-2 text-sm">
-        Graph catalog for current workspace scope.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Graphs</h2>
+          <p className="text-muted-foreground mt-2 text-sm">Graph catalog for current runtime catalog.</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Last synced: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Never"}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => void refreshFromRuntime()} disabled={loading}>
+          Refresh
+        </Button>
+      </div>
 
       <ListSearch
         value={searchInput}
@@ -169,13 +201,14 @@ export default function GraphsPage() {
                   />
                 </th>
                 <th className="relative px-4 py-2">
-                  Actions
+                  Sync
                   <ColumnResizeHandle
                     active={resizingColumnIndex === 3}
                     onMouseDown={(event) => startResize(3, event)}
                     onDoubleClick={() => resetColumnWidth(3)}
                   />
                 </th>
+                <th className="relative px-4 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -192,6 +225,10 @@ export default function GraphsPage() {
                   </td>
                   <td className="max-w-xl px-4 py-2 text-sm text-muted-foreground">
                     {item.description?.trim() ? item.description : "-"}
+                  </td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">
+                    <div>{item.sync_status}</div>
+                    {item.last_synced_at ? <div>{new Date(item.last_synced_at).toLocaleString()}</div> : null}
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex flex-wrap gap-2">
