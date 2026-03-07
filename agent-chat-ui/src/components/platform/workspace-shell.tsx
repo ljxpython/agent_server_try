@@ -22,6 +22,7 @@ const NAV_ITEMS = [
   { href: "/workspace/threads", label: "Threads" },
   { href: "/workspace/graphs", label: "Graphs" },
   { href: "/workspace/assistants", label: "Assistants" },
+  { href: "/workspace/runtime", label: "Runtime" },
   { href: "/workspace/projects", label: "Projects" },
   { href: "/workspace/users", label: "Users" },
   { href: "/workspace/me", label: "My Profile" },
