@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint, func
+from decimal import Decimal
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -114,6 +116,10 @@ class RefreshToken(Base):
 
 class Agent(Base):
     __tablename__ = "agents"
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_agents_project_name"),
+        UniqueConstraint("project_id", "langgraph_assistant_id", name="uq_agents_project_langgraph_assistant"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -126,6 +132,9 @@ class Agent(Base):
     runtime_base_url: Mapped[str] = mapped_column(String(512), nullable=False)
     langgraph_assistant_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready")
+    last_sync_error: Mapped[str | None] = mapped_column(String, nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     assistant_profile: Mapped[AssistantProfile | None] = relationship(
@@ -182,3 +191,126 @@ class AuditLog(Base):
     response_size: Mapped[int | None] = mapped_column(nullable=True)
     metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class RuntimeCatalogGraph(Base):
+    __tablename__ = "runtime_catalog_graphs"
+    __table_args__ = (UniqueConstraint("runtime_id", "graph_key", name="uq_runtime_catalog_graphs_runtime_graph"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    runtime_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    graph_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False, default="assistant_search")
+    raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready")
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RuntimeCatalogModel(Base):
+    __tablename__ = "runtime_catalog_models"
+    __table_args__ = (UniqueConstraint("runtime_id", "model_key", name="uq_runtime_catalog_models_runtime_model"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    runtime_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    model_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_default_runtime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready")
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class RuntimeCatalogTool(Base):
+    __tablename__ = "runtime_catalog_tools"
+    __table_args__ = (UniqueConstraint("runtime_id", "tool_key", name="uq_runtime_catalog_tools_runtime_tool"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    runtime_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    tool_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    source: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    sync_status: Mapped[str] = mapped_column(String(32), nullable=False, default="ready")
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProjectGraphPolicy(Base):
+    __tablename__ = "project_graph_policies"
+    __table_args__ = (UniqueConstraint("project_id", "graph_catalog_id", name="uq_project_graph_policies_project_graph"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    graph_catalog_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runtime_catalog_graphs.id", ondelete="CASCADE"), nullable=False
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    display_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProjectModelPolicy(Base):
+    __tablename__ = "project_model_policies"
+    __table_args__ = (UniqueConstraint("project_id", "model_catalog_id", name="uq_project_model_policies_project_model"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    model_catalog_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runtime_catalog_models.id", ondelete="CASCADE"), nullable=False
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_default_for_project: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    temperature_default: Mapped[Decimal | None] = mapped_column(Numeric(4, 2), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+
+
+class ProjectToolPolicy(Base):
+    __tablename__ = "project_tool_policies"
+    __table_args__ = (UniqueConstraint("project_id", "tool_catalog_id", name="uq_project_tool_policies_project_tool"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    tool_catalog_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("runtime_catalog_tools.id", ondelete="CASCADE"), nullable=False
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    display_order: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
