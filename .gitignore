@@ -176,8 +176,6 @@ cover/
 # Django stuff:
 *.log
 local_settings.py
-db.sqlite3
-db.sqlite3-journal
 
 # Flask stuff:
 instance/
@@ -364,10 +362,6 @@ logs/
 *.log
 uploads
 
-# sqlite 数据库
-**/aitestlab.db-shm
-**/aitestlab.db-wal
-**/aitestlab.db
 /.langgraph_api
 /data
 src/anything_rag_demo/output
@@ -380,10 +374,6 @@ fast_remove_copyright.py
 remove_copyright.py
 fast_remove_marker_tokens.py
 remove_marker_tokens.py
-src/data/memory_checkpoints.sqlite
-src/data/memory_checkpoints.sqlite-shm
-src/data/memory_checkpoints.sqlite-wal
-
 src/deep_agent_demo/backends_demo/src
 
 # Next.js build cache
