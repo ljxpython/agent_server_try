@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ListSearch } from "@/components/platform/list-search";
 import { PageStateEmpty, PageStateError, PageStateLoading } from "@/components/platform/page-state";
-import { listRuntimeModels, type RuntimeModelItem } from "@/lib/management-api/runtime";
+import { listRuntimeModels, refreshRuntimeModels, type RuntimeModelItem } from "@/lib/management-api/runtime";
 
 export default function RuntimeModelsPage() {
   const [items, setItems] = useState<RuntimeModelItem[]>([]);
@@ -13,6 +13,7 @@ export default function RuntimeModelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const refreshList = useCallback(async () => {
     setLoading(true);
@@ -20,9 +21,25 @@ export default function RuntimeModelsPage() {
     try {
       const payload = await listRuntimeModels();
       setItems(Array.isArray(payload.models) ? payload.models : []);
+      setLastSyncedAt(payload.last_synced_at ?? null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to load runtime models");
       setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshFromRuntime = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await refreshRuntimeModels();
+      const payload = await listRuntimeModels();
+      setItems(Array.isArray(payload.models) ? payload.models : []);
+      setLastSyncedAt(payload.last_synced_at ?? null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to refresh runtime models");
     } finally {
       setLoading(false);
     }
@@ -48,8 +65,11 @@ export default function RuntimeModelsPage() {
         <div>
           <h3 className="text-base font-semibold tracking-tight">Models</h3>
           <p className="text-muted-foreground mt-1 text-sm">Available runtime models and the current default option.</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Last synced: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Never"}
+          </p>
         </div>
-        <Button variant="outline" onClick={() => void refreshList()} disabled={loading}>
+        <Button variant="outline" onClick={() => void refreshFromRuntime()} disabled={loading}>
           Refresh
         </Button>
       </div>
@@ -77,6 +97,7 @@ export default function RuntimeModelsPage() {
                 <th className="px-4 py-2">Model ID</th>
                 <th className="px-4 py-2">Display Name</th>
                 <th className="px-4 py-2">Default</th>
+                <th className="px-4 py-2">Sync</th>
               </tr>
             </thead>
             <tbody>
@@ -86,6 +107,7 @@ export default function RuntimeModelsPage() {
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{item.model_id}</td>
                   <td className="px-4 py-2">{item.display_name}</td>
                   <td className="px-4 py-2 text-xs">{item.is_default ? "Yes" : ""}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">{item.sync_status}</td>
                 </tr>
               ))}
             </tbody>

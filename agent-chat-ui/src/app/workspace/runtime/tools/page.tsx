@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ListSearch } from "@/components/platform/list-search";
 import { PageStateEmpty, PageStateError, PageStateLoading } from "@/components/platform/page-state";
-import { listRuntimeTools, type RuntimeToolItem } from "@/lib/management-api/runtime";
+import { listRuntimeTools, refreshRuntimeTools, type RuntimeToolItem } from "@/lib/management-api/runtime";
 
 export default function RuntimeToolsPage() {
   const [items, setItems] = useState<RuntimeToolItem[]>([]);
@@ -13,6 +13,7 @@ export default function RuntimeToolsPage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const refreshList = useCallback(async () => {
     setLoading(true);
@@ -20,9 +21,25 @@ export default function RuntimeToolsPage() {
     try {
       const payload = await listRuntimeTools();
       setItems(Array.isArray(payload.tools) ? payload.tools : []);
+      setLastSyncedAt(payload.last_synced_at ?? null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Failed to load runtime tools");
       setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const refreshFromRuntime = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await refreshRuntimeTools();
+      const payload = await listRuntimeTools();
+      setItems(Array.isArray(payload.tools) ? payload.tools : []);
+      setLastSyncedAt(payload.last_synced_at ?? null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Failed to refresh runtime tools");
     } finally {
       setLoading(false);
     }
@@ -52,8 +69,11 @@ export default function RuntimeToolsPage() {
         <div>
           <h3 className="text-base font-semibold tracking-tight">Tools</h3>
           <p className="text-muted-foreground mt-1 text-sm">Available runtime tools, grouped in a searchable catalog.</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Last synced: {lastSyncedAt ? new Date(lastSyncedAt).toLocaleString() : "Never"}
+          </p>
         </div>
-        <Button variant="outline" onClick={() => void refreshList()} disabled={loading}>
+        <Button variant="outline" onClick={() => void refreshFromRuntime()} disabled={loading}>
           Refresh
         </Button>
       </div>
@@ -81,6 +101,7 @@ export default function RuntimeToolsPage() {
                 <th className="px-4 py-2">Name</th>
                 <th className="px-4 py-2">Source</th>
                 <th className="px-4 py-2">Description</th>
+                <th className="px-4 py-2">Sync</th>
               </tr>
             </thead>
             <tbody>
@@ -90,6 +111,7 @@ export default function RuntimeToolsPage() {
                   <td className="px-4 py-2 font-mono text-xs text-muted-foreground">{item.name}</td>
                   <td className="px-4 py-2 text-xs text-muted-foreground">{item.source}</td>
                   <td className="px-4 py-2">{item.description}</td>
+                  <td className="px-4 py-2 text-xs text-muted-foreground">{item.sync_status}</td>
                 </tr>
               ))}
             </tbody>
