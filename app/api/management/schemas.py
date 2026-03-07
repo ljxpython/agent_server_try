@@ -68,3 +68,22 @@ class UpdateAssistantRequest(BaseModel):
     config: dict[str, Any] | None = None
     context: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
+
+
+class UpsertProjectGraphPolicyRequest(BaseModel):
+    is_enabled: bool = True
+    display_order: int | None = None
+    note: str | None = None
+
+
+class UpsertProjectModelPolicyRequest(BaseModel):
+    is_enabled: bool = True
+    is_default_for_project: bool = False
+    temperature_default: float | None = None
+    note: str | None = None
+
+
+class UpsertProjectToolPolicyRequest(BaseModel):
+    is_enabled: bool = True
+    display_order: int | None = None
+    note: str | None = None
