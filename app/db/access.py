@@ -7,7 +7,22 @@ from typing import Any
 from sqlalchemy import asc, desc, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Agent, AssistantProfile, AuditLog, Project, ProjectMember, RefreshToken, Tenant, User
+from app.db.models import (
+    Agent,
+    AssistantProfile,
+    AuditLog,
+    Project,
+    ProjectGraphPolicy,
+    ProjectMember,
+    ProjectModelPolicy,
+    ProjectToolPolicy,
+    RefreshToken,
+    RuntimeCatalogGraph,
+    RuntimeCatalogModel,
+    RuntimeCatalogTool,
+    Tenant,
+    User,
+)
 
 
 def parse_uuid(value: str) -> uuid.UUID | None:
@@ -284,6 +299,9 @@ def create_agent(
         runtime_base_url=runtime_base_url,
         langgraph_assistant_id=langgraph_assistant_id,
         description=description,
+        sync_status="ready",
+        last_sync_error=None,
+        last_synced_at=datetime.now(timezone.utc),
     )
     session.add(row)
     session.flush()
@@ -360,6 +378,309 @@ def list_project_agents(
 def delete_agent(session: Session, row: Agent) -> None:
     session.delete(row)
     session.flush()
+
+
+def update_agent_sync_state(
+    session: Session,
+    row: Agent,
+    *,
+    sync_status: str,
+    last_sync_error: str | None,
+    last_synced_at: datetime | None,
+) -> Agent:
+    row.sync_status = sync_status
+    row.last_sync_error = last_sync_error
+    row.last_synced_at = last_synced_at
+    session.flush()
+    return row
+
+
+def update_agent_runtime_fields(
+    session: Session,
+    row: Agent,
+    *,
+    graph_id: str,
+    name: str,
+    description: str,
+    runtime_base_url: str,
+) -> Agent:
+    row.graph_id = graph_id
+    row.name = name
+    row.description = description
+    row.runtime_base_url = runtime_base_url
+    session.flush()
+    return row
+
+
+def get_runtime_catalog_model_by_key(session: Session, runtime_id: str, model_key: str) -> RuntimeCatalogModel | None:
+    stmt = select(RuntimeCatalogModel).where(
+        RuntimeCatalogModel.runtime_id == runtime_id,
+        RuntimeCatalogModel.model_key == model_key,
+    )
+    return session.scalar(stmt)
+
+
+def get_runtime_catalog_tool_by_key(session: Session, runtime_id: str, tool_key: str) -> RuntimeCatalogTool | None:
+    stmt = select(RuntimeCatalogTool).where(
+        RuntimeCatalogTool.runtime_id == runtime_id,
+        RuntimeCatalogTool.tool_key == tool_key,
+    )
+    return session.scalar(stmt)
+
+
+def get_runtime_catalog_graph_by_key(session: Session, runtime_id: str, graph_key: str) -> RuntimeCatalogGraph | None:
+    stmt = select(RuntimeCatalogGraph).where(
+        RuntimeCatalogGraph.runtime_id == runtime_id,
+        RuntimeCatalogGraph.graph_key == graph_key,
+    )
+    return session.scalar(stmt)
+
+
+def upsert_runtime_model_catalog_items(
+    session: Session,
+    *,
+    runtime_id: str,
+    items: list[dict[str, Any]],
+    synced_at: datetime,
+) -> list[RuntimeCatalogModel]:
+    rows: list[RuntimeCatalogModel] = []
+    for item in items:
+        model_key = str(item.get("model_id") or "").strip()
+        if not model_key:
+            continue
+        row = get_runtime_catalog_model_by_key(session, runtime_id, model_key)
+        if row is None:
+            row = RuntimeCatalogModel(runtime_id=runtime_id, model_key=model_key)
+            session.add(row)
+        row.display_name = str(item.get("display_name") or model_key)
+        row.is_default_runtime = bool(item.get("is_default"))
+        row.raw_payload_json = dict(item)
+        row.sync_status = "ready"
+        row.last_seen_at = synced_at
+        row.last_synced_at = synced_at
+        row.is_deleted = False
+        rows.append(row)
+    session.flush()
+    return rows
+
+
+def upsert_runtime_tool_catalog_items(
+    session: Session,
+    *,
+    runtime_id: str,
+    items: list[dict[str, Any]],
+    synced_at: datetime,
+) -> list[RuntimeCatalogTool]:
+    rows: list[RuntimeCatalogTool] = []
+    for item in items:
+        name = str(item.get("name") or "").strip()
+        source = str(item.get("source") or "").strip()
+        if not name:
+            continue
+        tool_key = f"{source}:{name}" if source else name
+        row = get_runtime_catalog_tool_by_key(session, runtime_id, tool_key)
+        if row is None:
+            row = RuntimeCatalogTool(runtime_id=runtime_id, tool_key=tool_key, name=name)
+            session.add(row)
+        row.name = name
+        row.source = source or None
+        row.description = str(item.get("description") or "") or None
+        row.raw_payload_json = dict(item)
+        row.sync_status = "ready"
+        row.last_seen_at = synced_at
+        row.last_synced_at = synced_at
+        row.is_deleted = False
+        rows.append(row)
+    session.flush()
+    return rows
+
+
+def upsert_runtime_graph_catalog_items(
+    session: Session,
+    *,
+    runtime_id: str,
+    items: list[dict[str, Any]],
+    synced_at: datetime,
+    source_type: str,
+) -> list[RuntimeCatalogGraph]:
+    rows: list[RuntimeCatalogGraph] = []
+    for item in items:
+        graph_key = str(item.get("graph_id") or item.get("graph_key") or "").strip()
+        if not graph_key:
+            continue
+        row = get_runtime_catalog_graph_by_key(session, runtime_id, graph_key)
+        if row is None:
+            row = RuntimeCatalogGraph(runtime_id=runtime_id, graph_key=graph_key)
+            session.add(row)
+        row.display_name = str(item.get("display_name") or graph_key) or graph_key
+        row.description = str(item.get("description") or "") or None
+        row.source_type = source_type
+        row.raw_payload_json = dict(item)
+        row.sync_status = "ready"
+        row.last_seen_at = synced_at
+        row.last_synced_at = synced_at
+        row.is_deleted = False
+        rows.append(row)
+    session.flush()
+    return rows
+
+
+def mark_missing_runtime_catalog_models_deleted(
+    session: Session, *, runtime_id: str, active_keys: set[str], synced_at: datetime
+) -> None:
+    stmt = select(RuntimeCatalogModel).where(RuntimeCatalogModel.runtime_id == runtime_id)
+    for row in session.scalars(stmt).all():
+        if row.model_key not in active_keys:
+            row.is_deleted = True
+            row.last_synced_at = synced_at
+    session.flush()
+
+
+def mark_missing_runtime_catalog_tools_deleted(
+    session: Session, *, runtime_id: str, active_keys: set[str], synced_at: datetime
+) -> None:
+    stmt = select(RuntimeCatalogTool).where(RuntimeCatalogTool.runtime_id == runtime_id)
+    for row in session.scalars(stmt).all():
+        if row.tool_key not in active_keys:
+            row.is_deleted = True
+            row.last_synced_at = synced_at
+    session.flush()
+
+
+def mark_missing_runtime_catalog_graphs_deleted(
+    session: Session, *, runtime_id: str, active_keys: set[str], synced_at: datetime
+) -> None:
+    stmt = select(RuntimeCatalogGraph).where(RuntimeCatalogGraph.runtime_id == runtime_id)
+    for row in session.scalars(stmt).all():
+        if row.graph_key not in active_keys:
+            row.is_deleted = True
+            row.last_synced_at = synced_at
+    session.flush()
+
+
+def list_runtime_model_catalog_items(session: Session, *, runtime_id: str, include_deleted: bool = False) -> list[RuntimeCatalogModel]:
+    stmt = select(RuntimeCatalogModel).where(RuntimeCatalogModel.runtime_id == runtime_id)
+    if not include_deleted:
+        stmt = stmt.where(RuntimeCatalogModel.is_deleted.is_(False))
+    stmt = stmt.order_by(desc(RuntimeCatalogModel.is_default_runtime), asc(RuntimeCatalogModel.model_key))
+    return list(session.scalars(stmt).all())
+
+
+def list_runtime_tool_catalog_items(session: Session, *, runtime_id: str, include_deleted: bool = False) -> list[RuntimeCatalogTool]:
+    stmt = select(RuntimeCatalogTool).where(RuntimeCatalogTool.runtime_id == runtime_id)
+    if not include_deleted:
+        stmt = stmt.where(RuntimeCatalogTool.is_deleted.is_(False))
+    stmt = stmt.order_by(asc(RuntimeCatalogTool.source), asc(RuntimeCatalogTool.name))
+    return list(session.scalars(stmt).all())
+
+
+def list_runtime_graph_catalog_items(session: Session, *, runtime_id: str, include_deleted: bool = False) -> list[RuntimeCatalogGraph]:
+    stmt = select(RuntimeCatalogGraph).where(RuntimeCatalogGraph.runtime_id == runtime_id)
+    if not include_deleted:
+        stmt = stmt.where(RuntimeCatalogGraph.is_deleted.is_(False))
+    stmt = stmt.order_by(asc(RuntimeCatalogGraph.graph_key))
+    return list(session.scalars(stmt).all())
+
+
+def upsert_project_graph_policy(
+    session: Session,
+    *,
+    project_id: uuid.UUID,
+    graph_catalog_id: uuid.UUID,
+    is_enabled: bool,
+    display_order: int | None,
+    note: str | None,
+    updated_by: uuid.UUID | None,
+) -> ProjectGraphPolicy:
+    stmt = select(ProjectGraphPolicy).where(
+        ProjectGraphPolicy.project_id == project_id,
+        ProjectGraphPolicy.graph_catalog_id == graph_catalog_id,
+    )
+    row = session.scalar(stmt)
+    if row is None:
+        row = ProjectGraphPolicy(project_id=project_id, graph_catalog_id=graph_catalog_id)
+        session.add(row)
+    row.is_enabled = is_enabled
+    row.display_order = display_order
+    row.note = note
+    row.updated_by = updated_by
+    session.flush()
+    return row
+
+
+def upsert_project_model_policy(
+    session: Session,
+    *,
+    project_id: uuid.UUID,
+    model_catalog_id: uuid.UUID,
+    is_enabled: bool,
+    is_default_for_project: bool,
+    temperature_default: Any,
+    note: str | None,
+    updated_by: uuid.UUID | None,
+) -> ProjectModelPolicy:
+    stmt = select(ProjectModelPolicy).where(
+        ProjectModelPolicy.project_id == project_id,
+        ProjectModelPolicy.model_catalog_id == model_catalog_id,
+    )
+    row = session.scalar(stmt)
+    if row is None:
+        row = ProjectModelPolicy(project_id=project_id, model_catalog_id=model_catalog_id)
+        session.add(row)
+    row.is_enabled = is_enabled
+    row.is_default_for_project = is_default_for_project
+    row.temperature_default = temperature_default
+    row.note = note
+    row.updated_by = updated_by
+    session.flush()
+    return row
+
+
+def upsert_project_tool_policy(
+    session: Session,
+    *,
+    project_id: uuid.UUID,
+    tool_catalog_id: uuid.UUID,
+    is_enabled: bool,
+    display_order: int | None,
+    note: str | None,
+    updated_by: uuid.UUID | None,
+) -> ProjectToolPolicy:
+    stmt = select(ProjectToolPolicy).where(
+        ProjectToolPolicy.project_id == project_id,
+        ProjectToolPolicy.tool_catalog_id == tool_catalog_id,
+    )
+    row = session.scalar(stmt)
+    if row is None:
+        row = ProjectToolPolicy(project_id=project_id, tool_catalog_id=tool_catalog_id)
+        session.add(row)
+    row.is_enabled = is_enabled
+    row.display_order = display_order
+    row.note = note
+    row.updated_by = updated_by
+    session.flush()
+    return row
+
+
+def list_project_graph_policies(session: Session, *, project_id: uuid.UUID) -> list[ProjectGraphPolicy]:
+    stmt = select(ProjectGraphPolicy).where(ProjectGraphPolicy.project_id == project_id).order_by(
+        asc(ProjectGraphPolicy.display_order), asc(ProjectGraphPolicy.updated_at)
+    )
+    return list(session.scalars(stmt).all())
+
+
+def list_project_model_policies(session: Session, *, project_id: uuid.UUID) -> list[ProjectModelPolicy]:
+    stmt = select(ProjectModelPolicy).where(ProjectModelPolicy.project_id == project_id).order_by(
+        desc(ProjectModelPolicy.is_default_for_project), asc(ProjectModelPolicy.updated_at)
+    )
+    return list(session.scalars(stmt).all())
+
+
+def list_project_tool_policies(session: Session, *, project_id: uuid.UUID) -> list[ProjectToolPolicy]:
+    stmt = select(ProjectToolPolicy).where(ProjectToolPolicy.project_id == project_id).order_by(
+        asc(ProjectToolPolicy.display_order), asc(ProjectToolPolicy.updated_at)
+    )
+    return list(session.scalars(stmt).all())
 
 
 def create_audit_log(
