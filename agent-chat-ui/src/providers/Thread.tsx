@@ -17,8 +17,20 @@ import { useWorkspaceContext } from "./WorkspaceContext";
 
 const DEFAULT_PROXY_API_URL = "http://localhost:2024";
 
+function isDirectRuntimeUrl(apiUrl: string): boolean {
+  try {
+    const parsed = new URL(apiUrl);
+    return (
+      ["localhost", "127.0.0.1"].includes(parsed.hostname) &&
+      ["8123", "8124"].includes(parsed.port)
+    );
+  } catch {
+    return apiUrl.includes(":8123") || apiUrl.includes(":8124");
+  }
+}
+
 function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
-  if (apiUrl.includes(":8123")) {
+  if (isDirectRuntimeUrl(apiUrl)) {
     return fallbackApiUrl || DEFAULT_PROXY_API_URL;
   }
   return apiUrl;
@@ -93,6 +105,7 @@ export function ThreadProvider({ children }: { children: ReactNode }) {
           ...getThreadSearchMetadata(targetType || "assistant", finalAssistantId),
         },
         limit: 100,
+        select: ["thread_id", "created_at", "updated_at", "metadata", "status"],
       });
 
       logClient({

@@ -309,8 +309,20 @@ const StreamSession = ({
 const DEFAULT_API_URL = "http://localhost:2024";
 const DEFAULT_ASSISTANT_ID = "assistant";
 
+function isDirectRuntimeUrl(apiUrl: string): boolean {
+  try {
+    const parsed = new URL(apiUrl);
+    return (
+      ["localhost", "127.0.0.1"].includes(parsed.hostname) &&
+      ["8123", "8124"].includes(parsed.port)
+    );
+  } catch {
+    return apiUrl.includes(":8123") || apiUrl.includes(":8124");
+  }
+}
+
 function normalizeApiUrl(apiUrl: string, fallbackApiUrl?: string): string {
-  if (apiUrl.includes(":8123")) {
+  if (isDirectRuntimeUrl(apiUrl)) {
     return fallbackApiUrl || DEFAULT_API_URL;
   }
   return apiUrl;
@@ -391,7 +403,7 @@ export const StreamProvider: FC<{ children: ReactNode }> = ({
       return;
     }
 
-    if (apiUrl.includes(":8123")) {
+    if (isDirectRuntimeUrl(apiUrl)) {
       setApiUrl(DEFAULT_API_URL);
       logClient({
         level: "warn",
