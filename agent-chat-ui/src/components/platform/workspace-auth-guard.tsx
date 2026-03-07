@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useMemo } from "react";
 
-import { getOidcTokenSet } from "@/lib/oidc-storage";
+import { getValidAccessToken } from "@/lib/oidc-storage";
 
 export function WorkspaceAuthGuard({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -15,8 +15,7 @@ export function WorkspaceAuthGuard({ children }: { children: ReactNode }) {
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
 
-  const tokenSet = getOidcTokenSet();
-  const loggedIn = Boolean(tokenSet?.access_token);
+  const loggedIn = Boolean(getValidAccessToken());
 
   useEffect(() => {
     if (loggedIn) {

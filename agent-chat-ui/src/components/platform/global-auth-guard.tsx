@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, useEffect, useMemo } from "react";
 
-import { getOidcTokenSet } from "@/lib/oidc-storage";
+import { getValidAccessToken } from "@/lib/oidc-storage";
 
 const PUBLIC_PATH_PREFIXES = ["/auth/login", "/auth/callback"];
 
@@ -21,7 +21,7 @@ export function GlobalAuthGuard({ children }: { children: ReactNode }) {
     return query ? `${pathname}?${query}` : pathname;
   }, [pathname, searchParams]);
 
-  const loggedIn = Boolean(getOidcTokenSet()?.access_token);
+  const loggedIn = Boolean(getValidAccessToken());
   const publicPath = isPublicPath(pathname);
 
   useEffect(() => {

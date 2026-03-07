@@ -26,6 +26,15 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     return token
 
 
+def _auth_json_response(request: Request, status_code: int, content: dict, headers: dict[str, str] | None = None) -> JSONResponse:
+    response_headers = {
+        "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+        "Vary": "Origin",
+        **(headers or {}),
+    }
+    return JSONResponse(status_code=status_code, content=content, headers=response_headers)
+
+
 def register_auth_context_middleware(app: FastAPI, settings: Settings) -> None:
     docs_paths = {"/docs", "/openapi.json", "/redoc"}
     public_paths = {"/_proxy/health", "/_management/auth/login", "/_management/auth/refresh"}
@@ -49,10 +58,11 @@ def register_auth_context_middleware(app: FastAPI, settings: Settings) -> None:
         token = _extract_bearer_token(request.headers.get("authorization"))
         if not token:
             if settings.auth_required:
-                return JSONResponse(
-                    status_code=401,
-                    content={"error": "unauthorized", "message": "Missing bearer token"},
-                    headers={"WWW-Authenticate": "Bearer"},
+                return _auth_json_response(
+                    request,
+                    401,
+                    {"error": "unauthorized", "message": "Missing bearer token"},
+                    {"WWW-Authenticate": "Bearer"},
                 )
             return await call_next(request)
 
@@ -65,19 +75,21 @@ def register_auth_context_middleware(app: FastAPI, settings: Settings) -> None:
                 request.url.path,
                 exc,
             )
-            return JSONResponse(
-                status_code=401,
-                content={"error": "invalid_token", "message": "Token validation failed"},
-                headers={"WWW-Authenticate": "Bearer"},
+            return _auth_json_response(
+                request,
+                401,
+                {"error": "invalid_token", "message": "Token validation failed"},
+                {"WWW-Authenticate": "Bearer"},
             )
 
         user_id = payload.get("sub")
         username = payload.get("username")
         if not user_id or not username:
-            return JSONResponse(
-                status_code=401,
-                content={"error": "invalid_token", "message": "Token payload is incomplete"},
-                headers={"WWW-Authenticate": "Bearer"},
+            return _auth_json_response(
+                request,
+                401,
+                {"error": "invalid_token", "message": "Token payload is incomplete"},
+                {"WWW-Authenticate": "Bearer"},
             )
 
         request.state.user_id = str(user_id)
@@ -89,17 +101,19 @@ def register_auth_context_middleware(app: FastAPI, settings: Settings) -> None:
         if session_factory is not None:
             user_uuid = parse_uuid(str(user_id))
             if user_uuid is None:
-                return JSONResponse(
-                    status_code=401,
-                    content={"error": "invalid_token", "message": "Token subject is invalid"},
-                    headers={"WWW-Authenticate": "Bearer"},
+                return _auth_json_response(
+                    request,
+                    401,
+                    {"error": "invalid_token", "message": "Token subject is invalid"},
+                    {"WWW-Authenticate": "Bearer"},
                 )
             with session_scope(session_factory) as session:
                 user = get_user_by_id(session, user_uuid)
                 if user is None or user.status != "active":
-                    return JSONResponse(
-                        status_code=403,
-                        content={"error": "user_disabled", "message": "User is disabled"},
+                    return _auth_json_response(
+                        request,
+                        403,
+                        {"error": "user_disabled", "message": "User is disabled"},
                     )
 
         response = await call_next(request)

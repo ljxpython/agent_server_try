@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { clearOidcTokenSet, getOidcTokenSet } from "@/lib/oidc-storage";
+import { clearOidcTokenSet, getValidAccessToken } from "@/lib/oidc-storage";
 
 export function AuthControls() {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
 
   useEffect(() => {
-    const tokenSet = getOidcTokenSet();
-    setLoggedIn(Boolean(tokenSet?.access_token));
+    setLoggedIn(Boolean(getValidAccessToken()));
   }, []);
 
   return loggedIn ? (
