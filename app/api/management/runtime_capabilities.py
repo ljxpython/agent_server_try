@@ -20,7 +20,13 @@ async def _proxy_internal_capabilities(request: Request, path: str) -> Any:
     if auth_header:
         headers["authorization"] = auth_header
 
-    response = await client.get(url, headers=headers)
+    try:
+        response = await client.get(url, headers=headers)
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail=f"runtime_capabilities_timeout: {exc}") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"runtime_capabilities_unavailable: {exc}") from exc
+
     if response.status_code >= 400:
         try:
             detail: Any = response.json()
