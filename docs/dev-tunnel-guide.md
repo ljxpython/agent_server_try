@@ -202,6 +202,12 @@ bash scripts/dev_tunnel_down.sh
 
 ## 6. 你本地应该怎么配 `.env`
 
+先记住一个关键事实：
+
+- 服务启动时只会读取仓库根目录的 `.env`
+- `config/environments/.env.dev.tunnel.example` 只是“tunnel 联调模板”
+- 切换环境的本质不是让程序自动读不同文件，而是把目标模板复制成根目录 `.env`
+
 如果你是“本地代码 + 远端基础设施联调”，应该优先使用：
 
 - `config/environments/.env.dev.tunnel.example`
@@ -254,6 +260,27 @@ BOOTSTRAP_ADMIN_PASSWORD=<set-a-local-dev-password>
 - `127.0.0.1:28080` / `127.0.0.1:28081` / `127.0.0.1:11143` 是脚本顺带暴露出来的可选远端服务端口
 
 所以 `.env` 看起来像在连本机，实际上是在借 SSH 隧道连远端。
+
+如果你要在不同环境之间切换，推荐直接覆盖根目录 `.env`：
+
+```bash
+# 最小本地启动模板
+cp .env.example .env
+
+# 本地代码 + 本地 PostgreSQL
+cp config/environments/.env.dev.example .env
+
+# 本地代码 + SSH 隧道联调远端基础设施
+cp config/environments/.env.dev.tunnel.example .env
+
+# 预发配置模板
+cp config/environments/.env.staging.example .env
+
+# 生产配置模板
+cp config/environments/.env.prod.example .env
+```
+
+复制之后，再按真实环境补齐密码、密钥等敏感值。
 
 ---
 

@@ -370,7 +370,7 @@ app/
 ### 19.3 本地配置
 
 - 后端使用自建认证配置。
-- 本地数据库：推荐使用 PostgreSQL，例如：`DATABASE_URL=postgresql://user:password@127.0.0.1:5432/agent_platform`。
+- 本地数据库：统一使用 PostgreSQL，例如：`DATABASE_URL=postgresql+psycopg://agent:<pg-password>@127.0.0.1:5432/agent_platform`。
 - 前端已关闭 OIDC/auto token，直接调用后端。
 
 ## 20. 下一阶段改造清单（不含代码）
