@@ -1,5 +1,12 @@
 # LangGraph Transparent Proxy (FastAPI)
 
+## 仓库状态说明
+
+- `agent_server/` 这套面向企业级场景的平台代理、鉴权、RBAC、治理与运行时兼容方案，已经合并沉淀到 [ai-agent-test-platform](https://github.com/ljxpython/ai-agent-test-platform)。
+- 当前目录下这个拆分项目仅保留为历史实现参考，已经不再作为主线仓库持续维护。
+- 如果你要继续推进企业级开发、部署落地或二次扩展，请直接以 `ai-agent-test-platform` 为准。
+- 下方内容主要用于回看这份历史实现的运行方式、配置约定与文档入口。
+
 This service is a transparent proxy in front of a LangGraph API server.
 
 The goal is full API passthrough so `agent-chat-ui` can point to this service
